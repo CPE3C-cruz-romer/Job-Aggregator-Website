@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: #f1f5f9;
+        }
+
+        .box {
+            width: 350px;
+            margin: 100px auto;
+            padding: 25px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 6px;              /* ✅ added */
+            border: 1px solid #ccc;          /* ✅ added */
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 6px;              /* ✅ added */
+            cursor: pointer;                 /* ✅ added */
+        }
+
+        button:hover {                      /* ✅ added */
+            background: #1d4ed8;
+        }
+
+        .error {                           /* ✅ added */
+            color: red;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .title {                           /* ✅ added */
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="box">
+    <h2 class="title">Login 🔐</h2>
+
+    <!-- ✅ ORIGINAL ERROR (Django form) -->
+    {% if form.errors %}
+        <p class="error">Invalid username or password</p>
+    {% endif %}
+
+    <!-- ✅ ADDED: custom error from views.py -->
+    {% if error %}
+        <p class="error">{{ error }}</p>
+    {% endif %}
+
+    <form method="post" action="/login/">  <!-- ✅ ADDED action (VERY IMPORTANT) -->
+        {% csrf_token %}
+        
+        <!-- ✅ keep your original -->
+        {{ form.as_p }}
+
+        <!-- ✅ ADDED: for custom login view -->
+        <input type="text" name="username" placeholder="Username" required>
+        <input type="password" name="password" placeholder="Password" required>
+
+        <!-- ✅ added hidden next redirect -->
+        <input type="hidden" name="next" value="/dashboard/">
+
+        <button type="submit">Login</button>
+    </form>
+
+    <!-- ✅ improved link -->
+    <p style="text-align:center;">
+        Don't have an account? 
+        <a href="/register/">Register</a>
+    </p>
+
+    <!-- ✅ ADDED: back to home -->
+    <p style="text-align:center;">
+        <a href="/">⬅ Back to Home</a>
+    </p>
+</div>
+
+</body>
+</html>

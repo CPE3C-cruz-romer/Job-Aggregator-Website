@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <style>
+        body {
+            font-family: Arial;
+            margin: 0;
+            background: #f4f6f9;
+        }
+
+        .header {
+            background: #1e293b;
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header a {
+            color: white;
+            text-decoration: none;
+            margin-left: 10px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 30px auto;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        input {
+            width: 70%;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            padding: 10px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .job {
+            padding: 15px;
+            border-left: 5px solid #2563eb;
+            margin-top: 10px;
+            background: #f9fafb;
+            border-radius: 6px;
+        }
+
+        .match {
+            color: #16a34a;
+            font-weight: bold;
+        }
+
+        .empty {
+            color: #888;
+            margin-top: 10px;
+        }
+
+        .loading {
+            color: #2563eb;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="header">
+    <div>Dashboard 🚀</div>
+    <div>
+        {{ user.username }} |
+        <a href="/accounts/logout/">Logout</a>
+    </div>
+</div>
+
+<div class="container">
+
+    <!-- AI MATCH -->
+    <div class="card">
+        <h2>AI Skill Matching 🧠</h2>
+        <input type="text" id="skills" placeholder="python, django">
+        <button onclick="matchJobs()">Match</button>
+        <div id="results"></div>
+    </div>
+
+    <!-- JOB LIST -->
+    <div class="card">
+        <h2>Available Jobs 💼</h2>
+        <div id="jobs">Loading jobs...</div>
+    </div>
+
+</div>
+
+<script>
+// LOAD JOBS (UNCHANGED LOGIC — JUST IMPROVED DISPLAY)
+fetch('/api/jobs/')
+.then(res => res.json())
+.then(data => {
+    let html = "";
+
+    if (data.length === 0) {
+        html = "<p class='empty'>No jobs available.</p>";
+    } else {
+        data.forEach(job => {
+            html += `<div class="job">
+                <strong>${job.title}</strong><br>
+                ${job.company} - ${job.location}
+            </div>`;
+        });
+    }
+
+    document.getElementById("jobs").innerHTML = html;
+})
+.catch(() => {
+    document.getElementById("jobs").innerHTML =
+        "<p class='empty'>Failed to load jobs.</p>";
+});
+
+// AI MATCH
+function matchJobs() {
+    let skills = document.getElementById("skills").value;
+
+    if (!skills.trim()) {
+        document.getElementById("results").innerHTML =
+            "<p class='empty'>Please enter your skills.</p>";
+        return;
+    }
+
+    document.getElementById("results").innerHTML =
+        "<p class='loading'>Matching jobs...</p>";
+
+    fetch(`/api/match-user/?skills=${skills}`)
+    .then(res => res.json())
+    .then(data => {
+        let html = "";
+
+        if (data.length === 0) {
+            html = "<p class='empty'>No matches found.</p>";
+        } else {
+            data.forEach(job => {
+                html += `<div class="job">
+                    <strong>${job.job}</strong><br>
+                    ${job.company}<br>
+                    <span class="match">Match: ${job.match.match_percentage}%</span>
+                </div>`;
+            });
+        }
+
+        document.getElementById("results").innerHTML = html;
+    });
+}
+</script>
+
+</body>
+</html>
