@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard - JobStream</title>
+    <style>
+        :root { --blue:#1f6fe5; --line:#dbe3ec; --bg:#f3f4f6; --ink:#111827; }
+        * { box-sizing: border-box; }
+        body { margin:0; font-family: Arial, sans-serif; background:var(--bg); color:var(--ink); }
+        .topbar { background:#fff; border-bottom:1px solid var(--line); padding:14px 30px; }
+        .topbar-inner { max-width:1100px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; }
+        .brand { font-weight:800; font-size:28px; text-decoration:none; color:#111; }
+        .brand span { color: var(--blue); }
+        .nav a { margin-left:18px; text-decoration:none; color:#374151; font-size:14px; }
+
+        .container { max-width:1100px; margin:26px auto; display:grid; grid-template-columns: 1fr 1fr; gap:18px; }
+        .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px; }
+
+        .field { width:100%; border:1px solid #d1d5db; border-radius:8px; padding:10px 12px; margin-bottom:8px; }
+        .btn { border:none; border-radius:8px; background:#e8f0ff; color:#1e40af; padding:9px 12px; margin-right:5px; margin-bottom:6px; cursor:pointer; }
+        .btn-primary { background: var(--blue); color: #fff; }
+
+        .job { padding:14px; border:1px solid var(--line); border-radius:10px; margin-bottom:10px; background:#fff; cursor:pointer; }
+        .job:hover { border-color: #9ec2ff; }
+        .job-title { color:#1558b0; font-weight:bold; font-size:21px; }
+        .small { color:#6b7280; font-size:13px; }
+        .match { color:#15803d; font-weight:bold; }
+        .pill { display:inline-block; padding:4px 8px; border-radius:999px; background:#eef2ff; color:#1e40af; margin:2px; font-size:12px; }
+
+        .camera-bottom { max-width:1100px; margin:0 auto 18px; background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px; }
+        video, .captured { width:100%; max-height:360px; border-radius:10px; border:1px solid #d1d5db; background:#111827; object-fit:contain; }
+        .captured { margin-top:10px; background:#fff; }
+
+        .footer { margin-top:35px; border-top:1px solid var(--line); text-align:center; padding:20px 10px; font-size:13px; color:#4b5563; background:#fff; }
+        @media (max-width: 920px) { .container { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a class="brand" href="/">Job<span>Stream</span></a>
+            <nav class="nav">
+                <a href="/about/">Meet the Team</a>
+                <a href="/logout/">Logout ({{ user.username }})</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="card">
+            <h2 style="margin-top:0;">Resume Picture Skill Matching</h2>
+            <p class="small">Upload a resume picture file or use the camera. You can also paste a Google Drive image link.</p>
+
+            <input class="field" type="file" id="resumeImage" accept="image/*">
+            <input class="field" type="url" id="driveUrl" placeholder="Paste Google Drive/shared image URL">
+
+            <button class="btn" onclick="ocrFromUpload()">Read from File</button>
+            <button class="btn" onclick="ocrFromDrive()">Read from Google Link</button>
+
+            <p class="small" id="status">Status: ready</p>
+
+            <h3>Extracted Resume Skills</h3>
+            <div id="resumeSkills" class="small">No resume parsed yet.</div>
+
+            <h3>Suitable Jobs (AI Skill Match)</h3>
+            <div id="results" class="small">Upload or capture a resume image to get suitable jobs.</div>
+        </section>
+
+        <section class="card">
+            <h2 style="margin-top:0;">Search Jobs</h2>
+            <p class="small">Search by role, company, location, or skills. Click any job for full details and save option.</p>
+            <input class="field" id="jobSearch" placeholder="Search jobs...">
+            <button class="btn btn-primary" onclick="loadJobs()">Search</button>
+            <button class="btn" onclick="refreshJobs()">Refresh From API</button>
+            <div id="jobs" class="small">Loading jobs...</div>
+
+            <hr style="border:none;border-top:1px solid var(--line);margin:14px 0;">
+            <h3 style="margin:0 0 10px;">Selected Job Details</h3>
+            <div id="jobDetail" class="small">Click a job to view complete details and application instructions.</div>
+        </section>
+    </main>
+
+    <section class="camera-bottom">
+        <h3 style="margin-top:0;">Camera Capture</h3>
+        <button class="btn" onclick="startCamera()">Start Camera</button>
+        <button class="btn" onclick="capturePhoto()">Capture + Match</button>
+        <button class="btn" onclick="stopCamera()">Stop Camera</button>
+        <video id="camera" autoplay playsinline muted></video>
+        <img class="captured" id="capturedImage" alt="Captured resume preview">
+    </section>
+
+    <footer class="footer">
+        © 2026 JobStream Aggregator. Built with by BulSU Students.<br>
+        Romer Cholo Cruz • Allan Valenzuela • Hugh Ariff Aserit • Eisen Liam
+    </footer>
+
+    <script>
+        let cameraStream = null;
+        const cameraEl = document.getElementById('camera');
+        const capturedEl = document.getElementById('capturedImage');
+        const hiddenCanvas = document.createElement('canvas');
+
+        const API_HEADERS = {
+            'X-Application-Id': 'aba5a62a',
+            'X-Application-Key': '75f0ba2c5c175d657c947ab1e219a92b'
+        };
+
+        function setStatus(msg) {
+            document.getElementById('status').textContent = `Status: ${msg}`;
+        }
+
+        function normalizeDriveUrl(url) {
+            const fileIdMatch = url.match(/\/d\/([^/]+)/) || url.match(/[?&]id=([^&]+)/);
+            if (!fileIdMatch) return url;
+            return `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}`;
+        }
+
+        function renderExtractedSkills(skills) {
+            if (!skills || skills.length === 0) {
+                document.getElementById('resumeSkills').innerHTML = 'No skills found from resume.';
+                return;
+            }
+            await loadJobs();
+            setStatus(`jobs refreshed (${data.count} total)`);
+        }
+
+        function renderMatches(data) {
+            if (!Array.isArray(data) || data.length === 0) {
+                document.getElementById('results').innerHTML = "<p class='small'>No suitable jobs found.</p>";
+                return;
+            }
+            let html = '';
+            data.forEach(job => {
+                html += `<div class="job" onclick="openJobByTitle('${job.job.replace(/'/g, "\\'")}')"><div class="job-title">${job.job}</div><div>${job.company}</div><div class="match">Match: ${job.match.match_percentage}%</div></div>`;
+            });
+            document.getElementById('results').innerHTML = html;
+        }
+
+        async function matchFromResumeText(resumeText) {
+            setStatus('matching skills to jobs...');
+            const res = await fetch(`/api/match-resume/?resume_text=${encodeURIComponent(resumeText)}`, { headers: API_HEADERS });
+            const data = await res.json();
+            if (data.detail) {
+                setStatus(data.detail);
+                return;
+            }
+            renderExtractedSkills(data.extracted_skills || []);
+            renderMatches(data.results || []);
+            setStatus('resume matched successfully');
+        }
+
+        async function runOCR(imageSource) {
+            setStatus('reading text from resume image...');
+            const result = await Tesseract.recognize(imageSource, 'eng');
+            await matchFromResumeText(result.data.text || '');
+        }
+
+        async function ocrFromUpload() {
+            const input = document.getElementById('resumeImage');
+            if (!input.files || !input.files[0]) {
+                setStatus('please choose a resume image file first');
+                return;
+            }
+            capturedEl.src = URL.createObjectURL(input.files[0]);
+            await runOCR(input.files[0]);
+        }
+
+        async function ocrFromDrive() {
+            const raw = document.getElementById('driveUrl').value.trim();
+            if (!raw) {
+                setStatus('paste a Google Drive/shared image URL first');
+                return;
+            }
+
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.src = normalizeDriveUrl(raw);
+
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+            }).catch(() => setStatus('cannot load image from the link (sharing or CORS issue)'));
+
+            if (img.complete && img.naturalWidth > 0) {
+                capturedEl.src = img.src;
+                await runOCR(img);
+            }
+        }
+
+        async function startCamera() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                setStatus('camera is not supported in this browser or insecure (use HTTPS/localhost)');
+                return;
+            }
+            try {
+                const preferredConstraints = {
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                };
+
+                try {
+                    cameraStream = await navigator.mediaDevices.getUserMedia(preferredConstraints);
+                } catch {
+                    cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                }
+
+                cameraEl.srcObject = cameraStream;
+                await cameraEl.play();
+                setStatus('camera started');
+            } catch (error) {
+                const name = error && error.name ? error.name : '';
+                if (name === 'NotAllowedError') {
+                    setStatus('camera permission denied. Please allow camera access in browser settings.');
+                } else if (name === 'NotFoundError') {
+                    setStatus('no camera device found on this device.');
+                } else if (name === 'NotReadableError') {
+                    setStatus('camera is currently used by another app. Close it and try again.');
+                } else if (name === 'SecurityError') {
+                    setStatus('camera blocked by security policy. Use HTTPS or localhost.');
+                } else {
+                    setStatus('failed to start camera. Check permission and browser security settings.');
+                }
+            }
+        }
+
+        function stopCamera() {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+            cameraEl.srcObject = null;
+            setStatus('camera stopped');
+        }
+
+        async function capturePhoto() {
+            if (!cameraStream) {
+                setStatus('start camera first');
+                return;
+            }
+            hiddenCanvas.width = cameraEl.videoWidth || 640;
+            hiddenCanvas.height = cameraEl.videoHeight || 360;
+            const context = hiddenCanvas.getContext('2d');
+            context.drawImage(cameraEl, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
+            capturedEl.src = hiddenCanvas.toDataURL('image/png');
+            stopCamera();
+            await runOCR(hiddenCanvas);
+        }
+
+        async function loadJobs() {
+            const q = encodeURIComponent(document.getElementById('jobSearch').value || '');
+            const res = await fetch(`/api/jobs/?q=${q}`, { headers: API_HEADERS });
+            const data = await res.json();
+
+            if (!Array.isArray(data) || data.length === 0) {
+                document.getElementById('jobs').innerHTML = "<p class='small'>No jobs found.</p>";
+                return;
+            }
+
+            let html = '';
+            data.forEach(job => {
+                html += `<div class="job" onclick="openJob(${job.id})"><div class="small">${job.company}</div><div class="job-title">${job.title}</div><div>${job.location}</div></div>`;
+            });
+            document.getElementById('jobs').innerHTML = html;
+        }
+
+        async function refreshJobs() {
+            setStatus('refreshing jobs from API...');
+            const res = await fetch('/api/jobs/refresh/', {
+                method: 'POST',
+                headers: API_HEADERS,
+            });
+            const data = await res.json();
+            if (data.detail) {
+                setStatus(data.detail);
+                return;
+            }
+            await loadJobs();
+            setStatus(`jobs refreshed (${data.count} total)`);
+        }
+
+        async function openJob(jobId) {
+            const res = await fetch(`/api/jobs/${jobId}/`, { headers: API_HEADERS });
+            const job = await res.json();
+            if (!job || job.detail) {
+                document.getElementById('jobDetail').innerHTML = 'Unable to open this job.';
+                return;
+            }
+
+            document.getElementById('jobDetail').innerHTML = `
+                <div class="job">
+                    <div class="job-title">${job.title}</div>
+                    <div><strong>Company:</strong> ${job.company}</div>
+                    <div><strong>Location:</strong> ${job.location}</div>
+                    <div><strong>Description:</strong><br>${job.description || 'No description.'}</div>
+                    <div><strong>Required Skills:</strong> ${job.skills_required || 'Not specified'}</div>
+                    <div><strong>How to Apply:</strong><br>${job.apply_instructions || 'Use the apply link below or contact the recruiter.'}</div>
+                    ${job.apply_url ? `<div><strong>Apply Link:</strong> <a href="${job.apply_url}" target="_blank" rel="noopener noreferrer">${job.apply_url}</a></div>` : ''}
+                    <button class="btn btn-primary" onclick="toggleSaveJob(${job.id})">${job.is_saved ? 'Saved ✓ (Click to Unsave)' : 'Save Job'}</button>
+                </div>
+            `;
+        }
+
+        async function openJobByTitle(title) {
+            const res = await fetch(`/api/jobs/?q=${encodeURIComponent(title)}`, { headers: API_HEADERS });
+            const jobs = await res.json();
+            if (Array.isArray(jobs) && jobs.length > 0) {
+                openJob(jobs[0].id);
+            }
+        }
+
+        async function toggleSaveJob(jobId) {
+            const res = await fetch(`/api/jobs/${jobId}/save/`, {
+                method: 'POST',
+                headers: API_HEADERS,
+            });
+            const data = await res.json();
+            if (data.detail) {
+                setStatus(data.detail);
+                return;
+            }
+            setStatus(data.message || 'Save state updated.');
+            openJob(jobId);
+        }
+
+        loadJobs();
+    </script>
+</body>
+</html>

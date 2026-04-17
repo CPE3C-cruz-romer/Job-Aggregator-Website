@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login - JobStream</title>
+    <style>
+        :root { --blue:#1f6fe5; --line:#dbe3ec; --bg:#f3f4f6; --ink:#111827; }
+        * { box-sizing: border-box; }
+        body { margin:0; font-family: Arial, sans-serif; background:var(--bg); color:var(--ink); }
+        .topbar { background:#fff; border-bottom:1px solid var(--line); padding:14px 30px; }
+        .topbar-inner { max-width:1100px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; }
+        .brand { font-weight:800; font-size:28px; text-decoration:none; color:#111; }
+        .brand span { color: var(--blue); }
+        .nav a { margin-left:18px; text-decoration:none; color:#374151; font-size:14px; }
+        .card { max-width:430px; margin:36px auto; background:#fff; border:1px solid var(--line); border-radius:14px; padding:24px; }
+        .error { color:#b91c1c; font-size:14px; }
+        input[type='text'], input[type='password'] { width:100%; border:1px solid #d1d5db; border-radius:8px; padding:10px 12px; margin:8px 0; }
+        .btn-primary { width:100%; border:none; border-radius:8px; background:var(--blue); color:#fff; padding:10px 12px; cursor:pointer; font-weight:bold; }
+        .small { font-size:12px; color:#4b5563; }
+        .footer { margin-top:35px; border-top:1px solid var(--line); text-align:center; padding:20px 10px; font-size:13px; color:#4b5563; background:#fff; }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a class="brand" href="/">Job<span>Stream</span></a>
+            <nav class="nav"><a href="/about/">Meet the Team</a></nav>
+        </div>
+    </header>
+
+    <main class="card">
+        <h2>Login</h2>
+        {% if form.errors %}<p class="error">Invalid username or password</p>{% endif %}
+        {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+        <form method="post" action="/login/">
+            {% csrf_token %}
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <input type="hidden" name="next" value="/dashboard/">
+            <button class="btn-primary" type="submit">Login</button>
+        </form>
+
+        <p class="small">No account yet? <a href="/register/">Register</a></p>
+    </main>
+
+    <footer class="footer">
+        © 2026 JobStream Aggregator. Built with ❤ by BulSU Students.<br>
+        Romer Cholo Cruz • Allan Valenzuela • Hugh Ariff Aserit • Eisen Liam
+    </footer>
+</body>
+</html>

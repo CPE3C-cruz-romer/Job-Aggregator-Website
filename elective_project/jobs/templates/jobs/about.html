@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Meet the Team - JobStream</title>
+    <style>
+        :root { --blue:#1f6fe5; --line:#dbe3ec; --bg:#f3f4f6; --ink:#111827; }
+        * { box-sizing: border-box; }
+        body { margin:0; font-family: Arial, sans-serif; background: var(--bg); color: var(--ink); }
+        .topbar { background:#fff; border-bottom:1px solid var(--line); padding:14px 30px; }
+        .topbar-inner { max-width:1100px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; }
+        .brand { font-weight:800; font-size:28px; text-decoration:none; color:#111; }
+        .brand span { color: var(--blue); }
+        .nav a { margin-left:18px; text-decoration:none; color:#374151; font-size:14px; }
+        .container { max-width:1100px; margin:28px auto; }
+        h1 { text-align:center; margin-bottom:8px; font-size:52px; }
+        .subtitle { text-align:center; color:#6b7280; margin-bottom:24px; }
+        .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:18px; }
+        .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:24px; text-align:center; }
+        .avatar {
+            width:92px; height:92px; margin:0 auto 14px; border-radius:50%;
+            display:flex; align-items:center; justify-content:center;
+            background: var(--blue); color:#fff; font-size:42px;
+        }
+        .role { font-size:12px; color:#2563eb; background:#e8f0ff; border-radius:999px; display:inline-block; padding:4px 10px; }
+        .footer { margin-top:35px; border-top:1px solid var(--line); text-align:center; padding:20px 10px; font-size:13px; color:#4b5563; background:#fff; }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a class="brand" href="/">Job<span>Stream</span></a>
+            <nav class="nav">
+                <a href="/about/">Meet the Team</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <h1>Built for the Future</h1>
+        <p class="subtitle">We are students from Bulacan State University dedicated to making job search easier.</p>
+
+        <section class="grid">
+            <article class="card">
+                <div class="avatar">RC</div>
+                <h3>Romer Cholo Cruz</h3>
+                <span class="role">Project Lead</span>
+                <p>Leads the architecture and main product direction.</p>
+            </article>
+            <article class="card">
+                <div class="avatar">AV</div>
+                <h3>Allan Valenzuela</h3>
+                <span class="role">Front-End Specialist</span>
+                <p>Designs and builds modern responsive UI and interactions.</p>
+            </article>
+            <article class="card">
+                <div class="avatar">HA</div>
+                <h3>Hugh Ariff Aserit</h3>
+                <span class="role">Backend Developer</span>
+                <p>Builds APIs and core data logic for the matching system.</p>
+            </article>
+            <article class="card">
+                <div class="avatar">EL</div>
+                <h3>Eisen Liam</h3>
+                <span class="role">QA Researcher</span>
+                <p>Ensures listing quality and stability of key workflows.</p>
+            </article>
+        </section>
+    </main>
+
+    <footer class="footer">
+        © 2026 JobStream Aggregator. Built with ❤ by BulSU Students.<br>
+        Romer Cholo Cruz • Allan Valenzuela • Hugh Ariff Aserit • Eisen Liam
+    </footer>
+</body>
+</html>
