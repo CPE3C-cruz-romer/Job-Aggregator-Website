@@ -1,6 +1,8 @@
+{% load static %}
 <!DOCTYPE html>
 <html>
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Meet the Team - JobStream</title>
     <style>
         :root { --blue:#1f6fe5; --line:#dbe3ec; --bg:#f3f4f6; --ink:#111827; }
@@ -11,24 +13,87 @@
         .brand { font-weight:800; font-size:28px; text-decoration:none; color:#111; }
         .brand span { color: var(--blue); }
         .nav a { margin-left:18px; text-decoration:none; color:#374151; font-size:14px; }
-        .container { max-width:1100px; margin:28px auto; }
-        h1 { text-align:center; margin-bottom:8px; font-size:52px; }
+
+        .container { max-width:1100px; margin:28px auto; padding:0 16px; }
+        h1 { text-align:center; margin-bottom:8px; font-size:clamp(32px, 6vw, 52px); }
         .subtitle { text-align:center; color:#6b7280; margin-bottom:24px; }
-        .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:18px; }
-        .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:24px; text-align:center; }
+
+        .grid {
+            display:grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap:18px;
+        }
+        .card {
+            background:#fff;
+            border:1px solid var(--line);
+            border-radius:14px;
+            padding:24px;
+            text-align:center;
+            box-shadow: 0 2px 10px rgba(17, 24, 39, 0.04);
+        }
         .avatar {
-            width:92px; height:92px; margin:0 auto 14px; border-radius:50%;
-            display:flex; align-items:center; justify-content:center;
-            background: var(--blue); color:#fff; font-size:42px;
+            width:140px;
+            height:176px;
+            margin:0 auto 14px;
+            border-radius:14px;
+            object-fit:cover;
+            object-position:center top;
+            border:3px solid #e5edff;
+            display:block;
+            background:#e5e7eb;
+        }
+        .member-info { min-width: 0; }
+        .member-info h3 { margin:0 0 10px; }
+        .member-info p {
+            margin:10px 0 0;
+            line-height:1.45;
+            overflow-wrap:anywhere;
+            word-break:break-word;
         }
         .role { font-size:12px; color:#2563eb; background:#e8f0ff; border-radius:999px; display:inline-block; padding:4px 10px; }
         .footer { margin-top:35px; border-top:1px solid var(--line); text-align:center; padding:20px 10px; font-size:13px; color:#4b5563; background:#fff; }
+
+        @media (max-width: 1024px) {
+            .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        @media (max-width: 640px) {
+            .topbar { padding:14px 16px; }
+            .topbar-inner { flex-direction:column; gap:8px; }
+            .nav a { margin-left:0; }
+            .container { margin:20px auto; }
+            .grid {
+                grid-template-columns: 1fr;
+                gap:14px;
+            }
+            .card {
+                text-align:center;
+                display:flex;
+                flex-direction:column;
+                align-items:center;
+                gap:10px;
+                padding:16px;
+            }
+            .avatar {
+                width:112px;
+                height:140px;
+                margin:0;
+                flex-shrink:0;
+            }
+            .member-info { width:100%; }
+        }
+
+        @media (max-width: 380px) {
+            .container { padding:0 12px; }
+            .card { padding:14px; }
+            .subtitle, .member-info p { font-size:14px; }
+        }
     </style>
 </head>
 <body>
     <header class="topbar">
         <div class="topbar-inner">
-            <a class="brand" href="/">Job<span>Stream</span></a>
+            <a class="brand" href="/">Job<span>Aggregator</span></a>
             <nav class="nav">
                 <a href="/about/">Meet the Team</a>
             </nav>
@@ -41,35 +106,43 @@
 
         <section class="grid">
             <article class="card">
-                <div class="avatar">RC</div>
-                <h3>Romer Cholo Cruz</h3>
-                <span class="role">Project Lead</span>
-                <p>Leads the architecture and main product direction.</p>
+                <img class="avatar" src="{% static 'jobs/team/romer-cholo-cruz.jpg' %}" alt="Romer Cholo Cruz" loading="lazy">
+                <div class="member-info">
+                    <h3>Romer Cholo Cruz</h3>
+                    <span class="role">Project Lead</span>
+                    <p>Leads the architecture and main product direction.</p>
+                </div>
             </article>
             <article class="card">
-                <div class="avatar">AV</div>
-                <h3>Allan Valenzuela</h3>
-                <span class="role">Front-End Specialist</span>
-                <p>Designs and builds modern responsive UI and interactions.</p>
+                <img class="avatar" src="{% static 'jobs/team/eisen.jpg' %}" alt="Eisen" loading="lazy">
+                <div class="member-info">
+                    <h3>Eisen</h3>
+                    <span class="role">QA Researcher</span>
+                    <p>Ensures listing quality and stability of key workflows.</p>
+                </div>
             </article>
             <article class="card">
-                <div class="avatar">HA</div>
-                <h3>Hugh Ariff Aserit</h3>
-                <span class="role">Backend Developer</span>
-                <p>Builds APIs and core data logic for the matching system.</p>
+                <img class="avatar" src="{% static 'jobs/team/allan-valenzuela.jpg' %}" alt="Allan Valenzuela" loading="lazy">
+                <div class="member-info">
+                    <h3>Allan Valenzuela</h3>
+                    <span class="role">Front-End Specialist</span>
+                    <p>Designs and builds modern responsive UI and interactions.</p>
+                </div>
             </article>
             <article class="card">
-                <div class="avatar">EL</div>
-                <h3>Eisen Liam</h3>
-                <span class="role">QA Researcher</span>
-                <p>Ensures listing quality and stability of key workflows.</p>
+                <img class="avatar" src="{% static 'jobs/team/hugh-ariff-aserit.jpg' %}" alt="Hugh Ariff Aserit" loading="lazy">
+                <div class="member-info">
+                    <h3>Hugh Ariff Aserit</h3>
+                    <span class="role">Backend Developer</span>
+                    <p>Builds APIs and core data logic for the matching system.</p>
+                </div>
             </article>
         </section>
     </main>
 
     <footer class="footer">
         © 2026 JobStream Aggregator. Built with ❤ by BulSU Students.<br>
-        Romer Cholo Cruz • Allan Valenzuela • Hugh Ariff Aserit • Eisen Liam
+        Romer Cholo Cruz • Eisen • Allan Valenzuela • Hugh Ariff Aserit
     </footer>
 </body>
 </html>
