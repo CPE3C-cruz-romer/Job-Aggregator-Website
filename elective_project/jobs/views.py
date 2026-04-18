@@ -5,6 +5,8 @@ from django.conf import settings
 from django.db.models import Q
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
+from urllib.parse import urlencode
+from django.contrib.auth.models import User
 import json
 
 from rest_framework.decorators import api_view
@@ -20,6 +22,14 @@ from django.contrib.auth import logout
 API_APP_ID = getattr(settings, "API_APP_ID", "aba5a62a")
 API_APP_KEY = getattr(settings, "API_APP_KEY", "75f0ba2c5c175d657c947ab1e219a92b")
 JOB_SOURCE_API_URL = getattr(settings, "JOB_SOURCE_API_URL", "")
+GOOGLE_OAUTH_ENABLED = getattr(settings, "GOOGLE_OAUTH_ENABLED", False)
+GOOGLE_OAUTH_CLIENT_ID = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", "")
+GOOGLE_OAUTH_CLIENT_SECRET = getattr(settings, "GOOGLE_OAUTH_CLIENT_SECRET", "")
+GOOGLE_OAUTH_REDIRECT_URI = getattr(
+    settings,
+    "GOOGLE_OAUTH_REDIRECT_URI",
+    "http://localhost:8000/auth/google/callback/",
+)
 
 
 def _is_api_authenticated(request):
@@ -163,6 +173,15 @@ def user_logout(request):
 
 
 def user_login(request):
+    oauth_error = request.GET.get('google_error', '').strip()
+    error_map = {
+        'missing-config': 'Google login is not configured yet. Please set Google OAuth credentials.',
+        'oauth-cancelled': 'Google login was cancelled.',
+        'token-failed': 'Google login failed while retrieving access token.',
+        'profile-failed': 'Google login failed while reading account details.',
+        'no-email': 'Google account has no email available for sign in.',
+    }
+
     if request.method == "POST":
         username = request.POST.get('username')
         password = request.POST.get('password')
@@ -175,10 +194,92 @@ def user_login(request):
             return redirect(next_url)
         else:
             return render(request, 'registration/login.html', {
-                'error': 'Invalid username or password'
+                'error': 'Invalid username or password',
+                'google_oauth_enabled': GOOGLE_OAUTH_ENABLED,
             })
 
-    return render(request, 'registration/login.html')
+    return render(request, 'registration/login.html', {
+        'error': error_map.get(oauth_error, ''),
+        'google_oauth_enabled': GOOGLE_OAUTH_ENABLED,
+    })
+
+
+def google_login_start(request):
+    if not GOOGLE_OAUTH_ENABLED:
+        return redirect('/login/?google_error=missing-config')
+    auth_params = {
+        "client_id": GOOGLE_OAUTH_CLIENT_ID,
+        "redirect_uri": GOOGLE_OAUTH_REDIRECT_URI,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "online",
+        "include_granted_scopes": "true",
+        "prompt": "select_account",
+    }
+    auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(auth_params)}"
+    return redirect(auth_url)
+
+
+def google_login_callback(request):
+    if not GOOGLE_OAUTH_ENABLED:
+        return redirect('/login/?google_error=missing-config')
+
+    code = request.GET.get('code', '').strip()
+    if not code:
+        return redirect('/login/?google_error=oauth-cancelled')
+
+    token_payload = urlencode({
+        "code": code,
+        "client_id": GOOGLE_OAUTH_CLIENT_ID,
+        "client_secret": GOOGLE_OAUTH_CLIENT_SECRET,
+        "redirect_uri": GOOGLE_OAUTH_REDIRECT_URI,
+        "grant_type": "authorization_code",
+    }).encode("utf-8")
+
+    token_req = Request(
+        "https://oauth2.googleapis.com/token",
+        data=token_payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+
+    try:
+        with urlopen(token_req, timeout=15) as token_res:
+            token_data = json.loads(token_res.read().decode("utf-8"))
+    except (URLError, HTTPError, TimeoutError, json.JSONDecodeError):
+        return redirect('/login/?google_error=token-failed')
+
+    id_token = token_data.get("id_token", "")
+    if not id_token:
+        return redirect('/login/?google_error=token-failed')
+
+    verify_req = Request(
+        f"https://oauth2.googleapis.com/tokeninfo?id_token={id_token}",
+        headers={"Accept": "application/json"},
+        method="GET",
+    )
+    try:
+        with urlopen(verify_req, timeout=15) as verify_res:
+            profile = json.loads(verify_res.read().decode("utf-8"))
+    except (URLError, HTTPError, TimeoutError, json.JSONDecodeError):
+        return redirect('/login/?google_error=profile-failed')
+
+    email = str(profile.get("email", "")).strip().lower()
+    if not email:
+        return redirect('/login/?google_error=no-email')
+
+    username = email
+    if User.objects.filter(username=username).exists():
+        user = User.objects.get(username=username)
+    else:
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=User.objects.make_random_password(),
+        )
+
+    auth_login(request, user)
+    return redirect('/dashboard/')
 
 # 🔹 HOME PAGE
 def home_page(request):
@@ -199,7 +300,10 @@ def register(request):
     else:
         form = UserCreationForm()
 
-    return render(request, 'jobs/register.html', {'form': form})
+    return render(request, 'jobs/register.html', {
+        'form': form,
+        'google_oauth_enabled': GOOGLE_OAUTH_ENABLED,
+    })
 
 
 # 🔹 DASHBOARD (PROTECTED)

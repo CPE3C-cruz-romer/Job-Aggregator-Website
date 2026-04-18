@@ -10,10 +10,30 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _load_env_file():
+    env_path = BASE_DIR / '.env'
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding='utf-8').splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, value = line.split('=', 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+_load_env_file()
 
 
 # Quick-start development settings - unsuitable for production
@@ -37,7 +57,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',
     'rest_framework',
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.google',
     'jobs',
 ]
 
@@ -47,6 +72,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -120,6 +146,51 @@ STATIC_URL = 'static/'
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/'
+SITE_ID = 1
+
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    'allauth.account.auth_backends.AuthenticationBackend',
+]
+
+ACCOUNT_EMAIL_VERIFICATION = 'none'
+ACCOUNT_AUTHENTICATION_METHOD = 'username_email'
+ACCOUNT_EMAIL_REQUIRED = True
+
+GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '')
+GOOGLE_OAUTH_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET', '')
+GOOGLE_OAUTH_ENABLED = bool(GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET)
+
+GOOGLE_PROVIDER_CONFIG = {
+    'SCOPE': ['profile', 'email'],
+    'AUTH_PARAMS': {'access_type': 'online'},
+}
+if GOOGLE_OAUTH_ENABLED:
+    GOOGLE_PROVIDER_CONFIG['APP'] = {
+        'client_id': GOOGLE_OAUTH_CLIENT_ID,
+        'secret': GOOGLE_OAUTH_CLIENT_SECRET,
+        'key': '',
+    }
+
+SOCIALACCOUNT_PROVIDERS = {
+    'google': GOOGLE_PROVIDER_CONFIG,
+}
+
+GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '')
+GOOGLE_OAUTH_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET', '')
+GOOGLE_OAUTH_ENABLED = bool(GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET)
+GOOGLE_OAUTH_REDIRECT_URI = os.getenv(
+    'GOOGLE_OAUTH_REDIRECT_URI',
+    'http://localhost:8000/auth/google/callback/'
+)
+
+GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '')
+GOOGLE_OAUTH_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET', '')
+GOOGLE_OAUTH_ENABLED = bool(GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET)
+GOOGLE_OAUTH_REDIRECT_URI = os.getenv(
+    'GOOGLE_OAUTH_REDIRECT_URI',
+    'http://localhost:8000/auth/google/callback/'
+)
 
 # External job source API (optional)
 JOB_SOURCE_API_URL = ''

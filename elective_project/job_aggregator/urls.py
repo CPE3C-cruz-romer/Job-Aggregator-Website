@@ -11,6 +11,7 @@ urlpatterns = [
     path('', include('jobs.urls')),
 
     path('api/', include('jobs.urls')),
+    path('accounts/', include('allauth.urls')),
 
     # 🔥 FIX: redirect default Django login
     path('accounts/login/', lambda request: redirect('/login/')),

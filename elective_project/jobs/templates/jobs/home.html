@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>JobStream</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Aggregator</title>
     <style>
         :root { --blue:#1f6fe5; --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --bg:#f3f4f6; }
         * { box-sizing: border-box; }
@@ -18,12 +19,19 @@
         .btn-primary { background:var(--blue); color:white; }
         .btn-light { background:#eff6ff; color:var(--blue); }
         .footer { margin-top:35px; border-top:1px solid var(--line); text-align:center; padding:20px 10px; font-size:13px; color:#4b5563; background:#fff; }
+        @media (max-width: 700px) {
+            .topbar { padding:12px 14px; }
+            .brand { font-size:22px; }
+            .hero { margin:18px 12px; padding:24px 16px; }
+            .hero h1 { font-size:28px; }
+            .btn { display:block; margin:8px 0; }
+        }
     </style>
 </head>
 <body>
     <header class="topbar">
         <div class="topbar-inner">
-            <a class="brand" href="/">Job<span>Stream</span></a>
+            <a class="brand" href="/">Job <span>Aggregator</span></a>
             <nav class="nav">
                 <a href="/about/">Meet the Team</a>
             </nav>
@@ -40,7 +48,7 @@
     </main>
 
     <footer class="footer">
-        © 2026 JobStream Aggregator. Built with by BulSU Students.<br>
+        © 2026 Job Aggregator. Built by BulSU Students.<br>
         Romer Cholo Cruz • Allan Valenzuela • Hugh Ariff Aserit • Eisen Liam
     </footer>
 </body>

@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Dashboard - JobStream</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
     <style>
         :root { --blue:#1f6fe5; --line:#dbe3ec; --bg:#f3f4f6; --ink:#111827; }
         * { box-sizing: border-box; }
@@ -27,17 +28,24 @@
         .pill { display:inline-block; padding:4px 8px; border-radius:999px; background:#eef2ff; color:#1e40af; margin:2px; font-size:12px; }
 
         .camera-bottom { max-width:1100px; margin:0 auto 18px; background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px; }
-        video, .captured { width:100%; max-height:360px; border-radius:10px; border:1px solid #d1d5db; background:#111827; object-fit:contain; }
-        .captured { margin-top:10px; background:#fff; }
+        .camera-frame { width:min(100%, 430px); margin:0 auto; }
+        video, .captured { width:100%; aspect-ratio:3/4; border-radius:10px; border:1px solid #d1d5db; background:#fff; object-fit:cover; }
+        .captured { margin-top:10px; }
 
         .footer { margin-top:35px; border-top:1px solid var(--line); text-align:center; padding:20px 10px; font-size:13px; color:#4b5563; background:#fff; }
-        @media (max-width: 920px) { .container { grid-template-columns: 1fr; } }
+        @media (max-width: 920px) {
+            .topbar { padding:12px 14px; }
+            .brand { font-size:22px; }
+            .container { grid-template-columns: 1fr; margin:14px 12px; }
+            .camera-bottom { margin:0 12px 12px; padding:16px; }
+            .btn { width:100%; margin-right:0; }
+        }
     </style>
 </head>
 <body>
     <header class="topbar">
         <div class="topbar-inner">
-            <a class="brand" href="/">Job<span>Stream</span></a>
+            <a class="brand" href="/">Dashboard</a>
             <nav class="nav">
                 <a href="/about/">Meet the Team</a>
                 <a href="/logout/">Logout ({{ user.username }})</a>
@@ -50,9 +58,10 @@
             <h2 style="margin-top:0;">Resume Picture Skill Matching</h2>
             <p class="small">Upload a resume picture file or use the camera. You can also paste a Google Drive image link.</p>
 
-            <input class="field" type="file" id="resumeImage" accept="image/*">
+            <input class="field" type="file" id="resumeImage" accept="image/*" capture="environment">
             <input class="field" type="url" id="driveUrl" placeholder="Paste Google Drive/shared image URL">
 
+            <button class="btn" onclick="openCameraApp()">Open Camera App</button>
             <button class="btn" onclick="ocrFromUpload()">Read from File</button>
             <button class="btn" onclick="ocrFromDrive()">Read from Google Link</button>
 
@@ -84,12 +93,14 @@
         <button class="btn" onclick="startCamera()">Start Camera</button>
         <button class="btn" onclick="capturePhoto()">Capture + Match</button>
         <button class="btn" onclick="stopCamera()">Stop Camera</button>
-        <video id="camera" autoplay playsinline muted></video>
-        <img class="captured" id="capturedImage" alt="Captured resume preview">
+        <div class="camera-frame">
+            <video id="camera" autoplay playsinline muted></video>
+            <img class="captured" id="capturedImage" alt="Captured resume preview">
+        </div>
     </section>
 
     <footer class="footer">
-        © 2026 JobStream Aggregator. Built with by BulSU Students.<br>
+        © 2026 Job Aggregator. Built by BulSU Students.<br>
         Romer Cholo Cruz • Allan Valenzuela • Hugh Ariff Aserit • Eisen Liam
     </footer>
 
@@ -119,8 +130,8 @@
                 document.getElementById('resumeSkills').innerHTML = 'No skills found from resume.';
                 return;
             }
-            await loadJobs();
-            setStatus(`jobs refreshed (${data.count} total)`);
+            const html = skills.map(skill => `<span class="pill">${skill}</span>`).join('');
+            document.getElementById('resumeSkills').innerHTML = html;
         }
 
         function renderMatches(data) {
@@ -164,6 +175,12 @@
             await runOCR(input.files[0]);
         }
 
+        function openCameraApp() {
+            const input = document.getElementById('resumeImage');
+            input.click();
+            setStatus('camera/gallery opened. take or choose a resume image, then press "Read from File".');
+        }
+
         async function ocrFromDrive() {
             const raw = document.getElementById('driveUrl').value.trim();
             if (!raw) {
@@ -192,6 +209,7 @@
                 return;
             }
             try {
+                stopCamera();
                 const preferredConstraints = {
                     video: {
                         facingMode: { ideal: 'environment' },
@@ -204,7 +222,15 @@
                 try {
                     cameraStream = await navigator.mediaDevices.getUserMedia(preferredConstraints);
                 } catch {
-                    cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                    if (!videoDevices.length) {
+                        throw new Error('NoCameraDevice');
+                    }
+                    cameraStream = await navigator.mediaDevices.getUserMedia({
+                        video: { deviceId: { ideal: videoDevices[0].deviceId } },
+                        audio: false
+                    });
                 }
 
                 cameraEl.srcObject = cameraStream;
