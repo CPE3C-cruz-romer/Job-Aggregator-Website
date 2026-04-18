@@ -1,96 +1,259 @@
 {% load static %}
-<!DOCTYPE html>
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meet the Team </title>
+    <title>Meet the Team</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@700&display=swap" rel="stylesheet">
     <style>
-        :root { --blue:#1f6fe5; --line:#dbe3ec; --bg:#f3f4f6; --ink:#111827; }
-        * { box-sizing: border-box; }
-        body { margin:0; font-family: Arial, sans-serif; background: var(--bg); color: var(--ink); }
-        .topbar { background:#fff; border-bottom:1px solid var(--line); padding:14px 30px; }
-        .topbar-inner { max-width:1100px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; }
-        .brand { font-weight:800; font-size:28px; text-decoration:none; color:#111; }
+        :root {
+            --blue: #185FA5;
+            --blue-light: #E6F1FB;
+            --line: #dbe3ec;
+            --bg: #f3f4f6;
+            --ink: #111827;
+        }
+ 
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+ 
+        body {
+            font-family: Arial, sans-serif;
+            background: var(--bg);
+            color: var(--ink);
+        }
+ 
+        /* ── Topbar ── */
+        .topbar {
+            background: #fff;
+            border-bottom: 1px solid var(--line);
+            padding: 14px 30px;
+        }
+ 
+        .topbar-inner {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+ 
+        .brand {
+            font-weight: 800;
+            font-size: 24px;
+            text-decoration: none;
+            color: #111;
+        }
+ 
         .brand span { color: var(--blue); }
-        .nav a { margin-left:18px; text-decoration:none; color:#374151; font-size:14px; }
-
-        .container { max-width:1100px; margin:28px auto; padding:0 16px; }
-        h1 { text-align:center; margin-bottom:8px; font-size:clamp(32px, 6vw, 52px); }
-        .subtitle { text-align:center; color:#6b7280; margin-bottom:24px; }
-
+ 
+        .nav a {
+            margin-left: 18px;
+            text-decoration: none;
+            color: #374151;
+            font-size: 14px;
+        }
+ 
+        .nav a:hover { color: var(--blue); }
+ 
+        /* ── Hero (dark) ── */
+        .hero {
+            background: #0f172a;
+            text-align: center;
+            padding: 70px 20px 60px;
+            width: 100%;
+        }
+ 
+        .hero-eyebrow {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #378ADD;
+            margin-bottom: 16px;
+        }
+ 
+        .hero h1 {
+            font-family: 'Oswald', Arial, sans-serif;
+            font-size: clamp(36px, 6vw, 58px);
+            font-weight: 700;
+            line-height: 1.05;
+            color: #fff;
+            margin-bottom: 0;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+ 
+        .hero h1 span { color: #378ADD; }
+ 
+        .hero-divider {
+            width: 44px;
+            height: 3px;
+            background: #378ADD;
+            border-radius: 2px;
+            margin: 20px auto;
+        }
+ 
+        .subtitle {
+            color: #94a3b8;
+            font-size: 15px;
+            line-height: 1.7;
+            max-width: 480px;
+            margin: 0 auto;
+        }
+ 
+        /* ── Grid ── */
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 40px 20px 60px;
+        }
+ 
         .grid {
-            display:grid;
+            display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap:18px;
+            gap: 20px;
         }
+ 
+        /* ── Card ── */
         .card {
-            background:#fff;
-            border:1px solid var(--line);
-            border-radius:14px;
-            padding:24px;
-            text-align:center;
-            box-shadow: 0 2px 10px rgba(17, 24, 39, 0.04);
+            background: #fff;
+            border-radius: 16px;
+            border: 1px solid var(--line);
+            overflow: hidden;
+            text-align: center;
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+            animation: fadeIn 0.5s ease both;
         }
+ 
+        .card-accent {
+            height: 5px;
+            width: 100%;
+        }
+ 
+        .card-body {
+            padding: 24px 20px 22px;
+        }
+ 
+        .card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.1);
+        }
+ 
+        .card:nth-child(1) { animation-delay: 0.05s; }
+        .card:nth-child(2) { animation-delay: 0.1s; }
+        .card:nth-child(3) { animation-delay: 0.15s; }
+        .card:nth-child(4) { animation-delay: 0.2s; }
+ 
+        /* ── Avatar ── */
+        .avatar-wrap {
+            position: relative;
+            width: 96px;
+            height: 96px;
+            margin: 0 auto 16px;
+        }
+ 
         .avatar {
-            width:140px;
-            height:176px;
-            margin:0 auto 14px;
-            border-radius:14px;
-            object-fit:cover;
-            object-position:center top;
-            border:3px solid #e5edff;
-            display:block;
-            background:#e5e7eb;
+            width: 96px;
+            height: 96px;
+            border-radius: 50%;
+            object-fit: cover;
+            object-position: center;
+            border: 3px solid var(--blue-light);
+            display: block;
+            background: #e5e7eb;
         }
-        .member-info { min-width: 0; }
-        .member-info h3 { margin:0 0 10px; }
+ 
+        /* Fallback initials shown when image fails */
+        .avatar-fallback {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: 700;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+ 
+        .avatar.errored { opacity: 0; }
+        .avatar.errored + .avatar-fallback { opacity: 1; }
+ 
+        .av-blue  { background: #E6F1FB; color: #0C447C; border: 3px solid #b5d4f4; }
+        .av-teal  { background: #E1F5EE; color: #085041; border: 3px solid #9FE1CB; }
+        .av-purple{ background: #EEEDFE; color: #3C3489; border: 3px solid #CECBF6; }
+        .av-coral { background: #FAECE7; color: #712B13; border: 3px solid #F5C4B3; }
+ 
+        /* ── Member Info ── */
+        .member-info h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--ink);
+            margin-bottom: 8px;
+            line-height: 1.3;
+        }
+ 
+        .role {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 999px;
+            padding: 4px 12px;
+            margin-bottom: 10px;
+        }
+ 
+        .role-blue   { background: #E6F1FB; color: #185FA5; }
+        .role-teal   { background: #E1F5EE; color: #0F6E56; }
+        .role-purple { background: #EEEDFE; color: #534AB7; }
+        .role-coral  { background: #FAECE7; color: #993C1D; }
+ 
         .member-info p {
-            margin:10px 0 0;
-            line-height:1.45;
-            overflow-wrap:anywhere;
-            word-break:break-word;
+            font-size: 13px;
+            color: #6b7280;
+            line-height: 1.6;
         }
-        .role { font-size:12px; color:#2563eb; background:#e8f0ff; border-radius:999px; display:inline-block; padding:4px 10px; }
-        .footer { margin-top:35px; border-top:1px solid var(--line); text-align:center; padding:20px 10px; font-size:13px; color:#4b5563; background:#fff; }
-
+ 
+        /* ── Footer ── */
+        .footer {
+            border-top: 1px solid var(--line);
+            text-align: center;
+            padding: 22px 10px;
+            font-size: 12px;
+            color: #9ca3af;
+            background: #000;
+            color: #d1d5db;
+            line-height: 1.8;
+        }
+ 
+        /* ── Animation ── */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+ 
+        /* ── Responsive ── */
         @media (max-width: 1024px) {
             .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
-
+ 
         @media (max-width: 640px) {
-            .topbar { padding:14px 16px; }
-            .topbar-inner { flex-direction:column; gap:8px; }
-            .nav a { margin-left:0; }
-            .container { margin:20px auto; }
-            .grid {
-                grid-template-columns: 1fr;
-                gap:14px;
-            }
-            .card {
-                text-align:center;
-                display:flex;
-                flex-direction:column;
-                align-items:center;
-                gap:10px;
-                padding:16px;
-            }
-            .avatar {
-                width:112px;
-                height:140px;
-                margin:0;
-                flex-shrink:0;
-            }
-            .member-info { width:100%; }
+            .topbar { padding: 14px 16px; }
+            .topbar-inner { flex-direction: column; gap: 8px; }
+            .nav a { margin-left: 0; }
+            .hero { padding: 50px 20px 40px; }
+            .grid { grid-template-columns: 1fr; gap: 14px; }
+            .card-body { padding: 18px 16px; }
         }
-
+ 
         @media (max-width: 380px) {
-            .container { padding:0 12px; }
-            .card { padding:14px; }
-            .subtitle, .member-info p { font-size:14px; }
+            .container { padding: 24px 12px 40px; }
+            .subtitle, .member-info p { font-size: 13px; }
         }
     </style>
 </head>
 <body>
+ 
     <header class="topbar">
         <div class="topbar-inner">
             <a class="brand" href="/">Job<span>Aggregator</span></a>
@@ -99,50 +262,88 @@
             </nav>
         </div>
     </header>
-
+ 
+    <div class="hero">
+        <p class="hero-eyebrow">Our Team</p>
+        <h1>Built for the <span>future</span></h1>
+        <div class="hero-divider"></div>
+        <p class="subtitle">We are students from Bulacan State University dedicated to making job search easier for everyone.</p>
+    </div>
+ 
     <main class="container">
-        <h1>Built for the Future</h1>
-        <p class="subtitle">We are students from Bulacan State University dedicated to making job search easier.</p>
-
         <section class="grid">
+ 
             <article class="card">
-                <img class="avatar" src="{% static 'jobs/team/romer-cholo-cruz.jpg' %}" alt="Romer Cholo Cruz" loading="lazy">
+                <div class="card-accent" style="background:#185FA5;"></div>
+                <div class="card-body">
+                <div class="avatar-wrap">
+                    <img class="avatar" src="{% static 'jobs/team/romer-cholo-cruz.jpg' %}" alt="Romer Cholo Cruz"
+                         onerror="this.classList.add('errored')">
+                    <div class="avatar-fallback av-blue">RC</div>
+                </div>
                 <div class="member-info">
                     <h3>Romer Cholo Cruz</h3>
-                    <span class="role">Project Lead</span>
-                    <p>Leads the architecture and main product direction.</p>
+                    <span class="role role-blue">Project Lead</span>
+                    <p>Leads the architecture and overall product direction.</p>
+                </div>
                 </div>
             </article>
+ 
             <article class="card">
-                <img class="avatar" src="{% static 'jobs/team/eisen.jpg' %}" alt="Eisen" loading="lazy">
+                <div class="card-accent" style="background:#0F6E56;"></div>
+                <div class="card-body">
+                <div class="avatar-wrap">
+                    <img class="avatar" src="{% static 'jobs/team/eisen.jpg' %}" alt="Eisen Liam Pahati"
+                         onerror="this.classList.add('errored')">
+                    <div class="avatar-fallback av-teal">EL</div>
+                </div>
                 <div class="member-info">
                     <h3>Eisen Liam Pahati</h3>
-                    <span class="role">QA Researcher</span>
-                    <p>Ensures listing quality and stability of key workflows.</p>
+                    <span class="role role-teal">QA Researcher</span>
+                    <p>Ensures system stability and maintains high-quality job listings.</p>
+                </div>
                 </div>
             </article>
+ 
             <article class="card">
-                <img class="avatar" src="{% static 'jobs/team/allan-valenzuela.jpg' %}" alt="Allan Valenzuela" loading="lazy">
+                <div class="card-accent" style="background:#534AB7;"></div>
+                <div class="card-body">
+                <div class="avatar-wrap">
+                    <img class="avatar" src="{% static 'jobs/team/allan-valenzuela.jpg' %}" alt="Allane Allan Paul Valenzuela"
+                         onerror="this.classList.add('errored')">
+                    <div class="avatar-fallback av-purple">AA</div>
+                </div>
                 <div class="member-info">
                     <h3>Allane Allan Paul Valenzuela</h3>
-                    <span class="role">Front-End Specialist</span>
-                    <p>Designs and builds modern responsive UI and interactions.</p>
+                    <span class="role role-purple">Front-End Specialist</span>
+                    <p>Creates responsive and engaging user interfaces and experiences.</p>
+                </div>
                 </div>
             </article>
+ 
             <article class="card">
-                <img class="avatar" src="{% static 'jobs/team/hugh-ariff-aserit.jpg' %}" alt="Hugh Ariff Aserit" loading="lazy">
+                <div class="card-accent" style="background:#993C1D;"></div>
+                <div class="card-body">
+                <div class="avatar-wrap">
+                    <img class="avatar" src="{% static 'jobs/team/hugh-ariff-aserit.jpg' %}" alt="Hugh Ariff Aserit"
+                         onerror="this.classList.add('errored')">
+                    <div class="avatar-fallback av-coral">HA</div>
+                </div>
                 <div class="member-info">
                     <h3>Hugh Ariff Aserit</h3>
-                    <span class="role">Backend Developer</span>
-                    <p>Builds APIs and core data logic for the matching system.</p>
+                    <span class="role role-coral">Backend Developer</span>
+                    <p>Develops APIs and core logic for the job matching system.</p>
+                </div>
                 </div>
             </article>
+ 
         </section>
     </main>
-
+ 
     <footer class="footer">
-        © 2026 JobStream Aggregator. Built with by BulSU Students.<br>
+        © 2026 JobStream Aggregator. Built with ♥ by BulSU Students.<br>
         Romer Cholo Cruz • Eisen Liam Pahati • Allane Allan Paul Valenzuela • Hugh Ariff Aserit
     </footer>
+ 
 </body>
 </html>
