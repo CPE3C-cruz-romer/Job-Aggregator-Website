@@ -1,11 +1,12 @@
 from django.urls import path
-from .views import job_list, job_detail, toggle_save_job, job_with_match, match_user_skills, match_resume_skills, refresh_jobs, home_page, about_page
+from .views import job_list, job_detail, toggle_save_job, saved_jobs, job_with_match, match_user_skills, match_resume_skills, refresh_jobs, home_page, about_page
 from .views import register, user_login, user_logout, google_login_start, google_login_callback
 
 urlpatterns = [
     path('jobs/', job_list),
     path('jobs/<int:job_id>/', job_detail),
     path('jobs/<int:job_id>/save/', toggle_save_job),
+    path('jobs/saved/', saved_jobs),
     path('jobs/refresh/', refresh_jobs),
     path('match/<int:user_id>/', job_with_match),
     path('match-user/', match_user_skills),

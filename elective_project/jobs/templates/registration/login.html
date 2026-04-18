@@ -48,8 +48,12 @@
             <input type="hidden" name="next" value="/dashboard/">
             <button class="btn-primary" type="submit">Login</button>
         </form>
-        <div class="divider">OR</div>
-        <a class="btn-google" href="/auth/google/">Continue with Google</a>
+        {% if google_oauth_enabled %}
+            <div class="divider">OR</div>
+            <a class="btn-google" href="/auth/google/">Continue with Google</a>
+        {% else %}
+            <p class="small">Google login is disabled. Add Google OAuth credentials in <code>.env</code>.</p>
+        {% endif %}
 
         <p class="small">No account yet? <a href="/register/">Register</a></p>
     </main>

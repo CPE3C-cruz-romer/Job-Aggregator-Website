@@ -23,6 +23,13 @@
         .job { padding:14px; border:1px solid var(--line); border-radius:10px; margin-bottom:10px; background:#fff; cursor:pointer; }
         .job:hover { border-color: #9ec2ff; }
         .job-title { color:#1558b0; font-weight:bold; font-size:21px; }
+        .job-grid { display:grid; grid-template-columns: 2fr 1fr; gap:12px; }
+        .saved-list { max-height:280px; overflow:auto; padding-right:4px; }
+        #jobs { max-height: 420px; overflow:auto; padding-right:4px; }
+        #results { max-height: 280px; overflow:auto; padding-right:4px; }
+        .progress-wrap { width:100%; height:12px; background:#e5e7eb; border-radius:999px; overflow:hidden; margin:8px 0 6px; }
+        .progress-bar { width:0%; height:100%; background:linear-gradient(90deg, #1f6fe5, #3b82f6); transition: width .25s ease; }
+        .category-box { border:1px solid var(--line); border-radius:10px; padding:10px; margin-top:8px; background:#f9fbff; }
         .small { color:#6b7280; font-size:13px; }
         .match { color:#15803d; font-weight:bold; }
         .pill { display:inline-block; padding:4px 8px; border-radius:999px; background:#eef2ff; color:#1e40af; margin:2px; font-size:12px; }
@@ -37,6 +44,7 @@
             .topbar { padding:12px 14px; }
             .brand { font-size:22px; }
             .container { grid-template-columns: 1fr; margin:14px 12px; }
+            #jobs { max-height: 300px; }
             .camera-bottom { margin:0 12px 12px; padding:16px; }
             .btn { width:100%; margin-right:0; }
         }
@@ -56,9 +64,9 @@
     <main class="container">
         <section class="card">
             <h2 style="margin-top:0;">Resume Picture Skill Matching</h2>
-            <p class="small">Upload a resume picture file or use the camera. You can also paste a Google Drive image link.</p>
+            <p class="small">Upload image, PDF, DOC, DOCX, or TXT resume files. OCR/progress runs automatically.</p>
 
-            <input class="field" type="file" id="resumeImage" accept="image/*" capture="environment">
+            <input class="field" type="file" id="resumeImage" accept="image/*,.pdf,.doc,.docx,.txt" capture="environment">
             <input class="field" type="url" id="driveUrl" placeholder="Paste Google Drive/shared image URL">
 
             <button class="btn" onclick="openCameraApp()">Open Camera App</button>
@@ -66,21 +74,30 @@
             <button class="btn" onclick="ocrFromDrive()">Read from Google Link</button>
 
             <p class="small" id="status">Status: ready</p>
+            <div class="progress-wrap"><div id="resumeProgressBar" class="progress-bar"></div></div>
+            <div class="small" id="resumeProgressText">0%</div>
 
             <h3>Extracted Resume Skills</h3>
             <div id="resumeSkills" class="small">No resume parsed yet.</div>
+            <div id="skillCategories" class="small">Skill categories will appear after upload.</div>
 
             <h3>Suitable Jobs (AI Skill Match)</h3>
             <div id="results" class="small">Upload or capture a resume image to get suitable jobs.</div>
         </section>
 
         <section class="card">
-            <h2 style="margin-top:0;">Search Jobs</h2>
-            <p class="small">Search by role, company, location, or skills. Click any job for full details and save option.</p>
+            <h2 style="margin-top:0;">Search Jobs (Adzuna-style Feed)</h2>
+            <p class="small">Search by role, company, location, or skills. Save jobs and reopen them from the saved list.</p>
             <input class="field" id="jobSearch" placeholder="Search jobs...">
             <button class="btn btn-primary" onclick="loadJobs()">Search</button>
             <button class="btn" onclick="refreshJobs()">Refresh From API</button>
-            <div id="jobs" class="small">Loading jobs...</div>
+            <div class="job-grid">
+                <div id="jobs" class="small">Loading jobs...</div>
+                <div>
+                    <h3 style="margin-top:0;">Saved Jobs</h3>
+                    <div id="savedJobs" class="saved-list small">No saved jobs yet.</div>
+                </div>
+            </div>
 
             <hr style="border:none;border-top:1px solid var(--line);margin:14px 0;">
             <h3 style="margin:0 0 10px;">Selected Job Details</h3>
@@ -104,19 +121,75 @@
         Romer Cholo Cruz • Allan Valenzuela • Hugh Ariff Aserit • Eisen Liam
     </footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.5.136/build/pdf.min.mjs" type="module"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mammoth@1.9.0/mammoth.browser.min.js"></script>
     <script>
+        const skillCategoryMap = {
+            'Computer-Based': ['python', 'java', 'javascript', 'typescript', 'react', 'node', 'sql', 'aws', 'docker', 'linux', 'git', 'html', 'css', 'django', 'flask', 'ai', 'machine learning'],
+            'Construction': ['construction', 'autocad', 'quantity surveying', 'civil', 'safety', 'welding', 'carpentry', 'masonry', 'plumbing', 'electrical'],
+            'Business/Admin': ['management', 'sales', 'customer service', 'accounting', 'finance', 'excel', 'marketing', 'operations', 'communication'],
+            'Healthcare': ['nursing', 'caregiver', 'medical', 'pharmacy', 'patient care', 'clinical'],
+        };
         let cameraStream = null;
         const cameraEl = document.getElementById('camera');
         const capturedEl = document.getElementById('capturedImage');
         const hiddenCanvas = document.createElement('canvas');
+        const progressBarEl = document.getElementById('resumeProgressBar');
+        const progressTextEl = document.getElementById('resumeProgressText');
 
         const API_HEADERS = {
             'X-Application-Id': 'aba5a62a',
             'X-Application-Key': '75f0ba2c5c175d657c947ab1e219a92b'
         };
+        const API_HEADERS_WITH_CSRF = {
+            ...API_HEADERS,
+            'X-CSRFToken': getCookie('csrftoken')
+        };
+
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return '';
+        }
 
         function setStatus(msg) {
             document.getElementById('status').textContent = `Status: ${msg}`;
+        }
+        function setProgress(percent, label = 'processing') {
+            const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
+            progressBarEl.style.width = `${safePercent}%`;
+            progressTextEl.textContent = `${safePercent}% ${label}`;
+        }
+        function categorizeSkills(skills) {
+            const normalized = (skills || []).map(skill => String(skill).toLowerCase());
+            const categories = {};
+            Object.entries(skillCategoryMap).forEach(([category, keys]) => {
+                const matched = normalized.filter(skill => keys.some(key => skill.includes(key)));
+                if (matched.length) {
+                    categories[category] = [...new Set(matched)];
+                }
+            });
+            if (!Object.keys(categories).length && normalized.length) {
+                categories['General'] = normalized;
+            }
+            return categories;
+        }
+        function renderSkillCategories(skills) {
+            const categories = categorizeSkills(skills);
+            const entries = Object.entries(categories);
+            if (!entries.length) {
+                document.getElementById('skillCategories').innerHTML = 'No skill category identified yet.';
+                return;
+            }
+            const html = entries.map(([name, values]) => `
+                <div class="category-box">
+                    <strong>${name}</strong><br>
+                    ${values.map(v => `<span class="pill">${v}</span>`).join('')}
+                </div>
+            `).join('');
+            document.getElementById('skillCategories').innerHTML = html;
         }
 
         function normalizeDriveUrl(url) {
@@ -155,30 +228,120 @@
                 return;
             }
             renderExtractedSkills(data.extracted_skills || []);
+            renderSkillCategories(data.extracted_skills || []);
             renderMatches(data.results || []);
+            setProgress(100, 'done');
             setStatus('resume matched successfully');
         }
 
         async function runOCR(imageSource) {
             setStatus('reading text from resume image...');
-            const result = await Tesseract.recognize(imageSource, 'eng');
+            setProgress(5, 'starting OCR');
+            const result = await Tesseract.recognize(imageSource, 'eng', {
+                logger: (msg) => {
+                    if (typeof msg.progress === 'number') {
+                        setProgress(msg.progress * 100, msg.status || 'reading');
+                    }
+                }
+            });
             await matchFromResumeText(result.data.text || '');
+        }
+
+        async function readPdfText(file) {
+            setStatus('reading PDF resume...');
+            setProgress(5, 'loading PDF');
+            const pdfBytes = await file.arrayBuffer();
+            const pdfjs = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.5.136/build/pdf.min.mjs');
+            pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.5.136/build/pdf.worker.min.mjs';
+            const pdf = await pdfjs.getDocument({ data: pdfBytes }).promise;
+            let text = '';
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                const page = await pdf.getPage(pageNum);
+                const content = await page.getTextContent();
+                const pageText = content.items.map(item => item.str || '').join(' ');
+                text += ` ${pageText}`;
+                setProgress((pageNum / pdf.numPages) * 90 + 5, `reading PDF page ${pageNum}/${pdf.numPages}`);
+            }
+            return text.trim();
+        }
+
+        async function readDocxText(file) {
+            setStatus('reading DOCX resume...');
+            setProgress(10, 'opening DOCX');
+            const arrayBuffer = await file.arrayBuffer();
+            const result = await mammoth.extractRawText({ arrayBuffer });
+            setProgress(95, 'DOCX text extracted');
+            return (result.value || '').trim();
+        }
+
+        async function readDocText(file) {
+            setStatus('reading DOC resume...');
+            setProgress(25, 'decoding DOC');
+            const arrayBuffer = await file.arrayBuffer();
+            const decoded = new TextDecoder('latin1').decode(arrayBuffer);
+            const clean = decoded.replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s+/g, ' ');
+            setProgress(95, 'DOC text decoded');
+            return clean.trim();
+        }
+
+        async function parseUploadedResume(file) {
+            const fileName = (file.name || '').toLowerCase();
+            if (file.type.startsWith('image/')) {
+                await runOCR(file);
+                return;
+            }
+            if (file.type === 'application/pdf' || fileName.endsWith('.pdf')) {
+                const text = await readPdfText(file);
+                await matchFromResumeText(text);
+                return;
+            }
+            if (fileName.endsWith('.docx')) {
+                const text = await readDocxText(file);
+                await matchFromResumeText(text);
+                return;
+            }
+            if (fileName.endsWith('.doc')) {
+                const text = await readDocText(file);
+                await matchFromResumeText(text);
+                return;
+            }
+            if (file.type === 'text/plain' || fileName.endsWith('.txt')) {
+                setStatus('reading TXT resume...');
+                setProgress(30, 'opening text file');
+                const text = await file.text();
+                setProgress(95, 'text extracted');
+                await matchFromResumeText(text);
+                return;
+            }
+            throw new Error('UnsupportedFile');
         }
 
         async function ocrFromUpload() {
             const input = document.getElementById('resumeImage');
             if (!input.files || !input.files[0]) {
-                setStatus('please choose a resume image file first');
+                setStatus('please choose a resume file first');
                 return;
             }
-            capturedEl.src = URL.createObjectURL(input.files[0]);
-            await runOCR(input.files[0]);
+            const file = input.files[0];
+            if (file.type.startsWith('image/')) {
+                capturedEl.src = URL.createObjectURL(file);
+            } else {
+                capturedEl.removeAttribute('src');
+            }
+            try {
+                await parseUploadedResume(file);
+            } catch (error) {
+                setProgress(0, 'failed');
+                setStatus(error && error.message === 'UnsupportedFile'
+                    ? 'unsupported file type. use image, PDF, DOC, DOCX, or TXT.'
+                    : 'failed to read resume file. try another file format.');
+            }
         }
 
         function openCameraApp() {
             const input = document.getElementById('resumeImage');
             input.click();
-            setStatus('camera/gallery opened. take or choose a resume image, then press "Read from File".');
+            setStatus('camera/gallery opened. choose a file to auto-read.');
         }
 
         async function ocrFromDrive() {
@@ -275,9 +438,10 @@
             await runOCR(hiddenCanvas);
         }
 
-        async function loadJobs() {
+        async function loadJobs(forceRefresh = false) {
             const q = encodeURIComponent(document.getElementById('jobSearch').value || '');
-            const res = await fetch(`/api/jobs/?q=${q}`, { headers: API_HEADERS });
+            const refresh = forceRefresh ? '&refresh=1' : '';
+            const res = await fetch(`/api/jobs/?q=${q}${refresh}`, { headers: API_HEADERS });
             const data = await res.json();
 
             if (!Array.isArray(data) || data.length === 0) {
@@ -290,20 +454,22 @@
                 html += `<div class="job" onclick="openJob(${job.id})"><div class="small">${job.company}</div><div class="job-title">${job.title}</div><div>${job.location}</div></div>`;
             });
             document.getElementById('jobs').innerHTML = html;
+            await loadSavedJobs();
         }
 
         async function refreshJobs() {
             setStatus('refreshing jobs from API...');
             const res = await fetch('/api/jobs/refresh/', {
                 method: 'POST',
-                headers: API_HEADERS,
+                credentials: 'same-origin',
+                headers: API_HEADERS_WITH_CSRF,
             });
             const data = await res.json();
             if (data.detail) {
                 setStatus(data.detail);
                 return;
             }
-            await loadJobs();
+            await loadJobs(true);
             setStatus(`jobs refreshed (${data.count} total)`);
         }
 
@@ -340,7 +506,8 @@
         async function toggleSaveJob(jobId) {
             const res = await fetch(`/api/jobs/${jobId}/save/`, {
                 method: 'POST',
-                headers: API_HEADERS,
+                credentials: 'same-origin',
+                headers: API_HEADERS_WITH_CSRF,
             });
             const data = await res.json();
             if (data.detail) {
@@ -349,9 +516,31 @@
             }
             setStatus(data.message || 'Save state updated.');
             openJob(jobId);
+            await loadSavedJobs();
         }
 
-        loadJobs();
+        async function loadSavedJobs() {
+            const res = await fetch('/api/jobs/saved/', { headers: API_HEADERS });
+            const data = await res.json();
+            if (data.detail) {
+                document.getElementById('savedJobs').innerHTML = data.detail;
+                return;
+            }
+            if (!Array.isArray(data) || data.length === 0) {
+                document.getElementById('savedJobs').innerHTML = 'No saved jobs yet.';
+                return;
+            }
+
+            let html = '';
+            data.forEach(job => {
+                html += `<div class="job" onclick="openJob(${job.id})"><div class="job-title" style="font-size:16px;">${job.title}</div><div class="small">${job.company}</div><div class="small">${job.location}</div></div>`;
+            });
+            document.getElementById('savedJobs').innerHTML = html;
+        }
+
+        loadJobs(true);
+        loadSavedJobs();
+        document.getElementById('resumeImage').addEventListener('change', ocrFromUpload);
     </script>
 </body>
 </html>

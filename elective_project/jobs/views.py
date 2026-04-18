@@ -6,8 +6,11 @@ from django.db.models import Q
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 from urllib.parse import urlencode
+from urllib.parse import quote_plus
+import secrets
 from django.contrib.auth.models import User
 import json
+import re
 
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -18,10 +21,16 @@ from .ai import match_skills, extract_skills_from_resume
 
 from django.contrib.auth import authenticate, login as auth_login
 from django.contrib.auth import logout
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 API_APP_ID = getattr(settings, "API_APP_ID", "aba5a62a")
 API_APP_KEY = getattr(settings, "API_APP_KEY", "75f0ba2c5c175d657c947ab1e219a92b")
 JOB_SOURCE_API_URL = getattr(settings, "JOB_SOURCE_API_URL", "")
+ADZUNA_API_URL = "https://api.adzuna.com/v1/api/jobs"
+ADZUNA_APP_ID = getattr(settings, "ADZUNA_APP_ID", "")
+ADZUNA_APP_KEY = getattr(settings, "ADZUNA_APP_KEY", "")
+ADZUNA_COUNTRY = getattr(settings, "ADZUNA_COUNTRY", "us")
+ADZUNA_MAX_PAGES = max(1, int(getattr(settings, "ADZUNA_MAX_PAGES", 3)))
 GOOGLE_OAUTH_ENABLED = getattr(settings, "GOOGLE_OAUTH_ENABLED", False)
 GOOGLE_OAUTH_CLIENT_ID = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", "")
 GOOGLE_OAUTH_CLIENT_SECRET = getattr(settings, "GOOGLE_OAUTH_CLIENT_SECRET", "")
@@ -38,55 +47,37 @@ def _is_api_authenticated(request):
     return app_id == API_APP_ID and app_key == API_APP_KEY
 
 
+SKILL_KEYWORDS = [
+    "python", "django", "flask", "fastapi", "java", "javascript", "typescript",
+    "react", "vue", "angular", "node", "nodejs", "php", "laravel", "c#", ".net",
+    "golang", "go", "ruby", "rails", "sql", "postgresql", "mysql", "mongodb",
+    "redis", "docker", "kubernetes", "aws", "azure", "gcp", "linux", "bash",
+    "git", "ci/cd", "graphql", "rest", "html", "css", "tailwind", "bootstrap",
+    "machine learning", "ai", "nlp", "data analysis", "pandas", "numpy", "spark",
+]
+LEGACY_SAMPLE_JOB_TITLES = {
+    "Junior Web Developer",
+    "Systems Administrator",
+    "UI Designer",
+    "Network Engineer",
+}
+
+
 def _get_jobs():
     _sync_jobs_from_source()
-    jobs = Job.objects.all()
-    if jobs.exists():
-        return jobs
-    _seed_jobs()
+    _remove_legacy_sample_jobs()
     return Job.objects.all()
 
 
-def _seed_jobs():
-    seed_jobs = [
-        {
-            "title": "Junior Web Developer",
-            "company": "Nexus Tech",
-            "description": "Build and maintain Django web applications.",
-            "skills_required": "python,django,html,css,javascript",
-            "location": "Manila, PH",
-            "apply_instructions": "Send your updated CV and portfolio to HR.",
-            "apply_url": "",
-        },
-        {
-            "title": "Systems Administrator",
-            "company": "CloudScale",
-            "description": "Manage Linux servers and deployment pipelines.",
-            "skills_required": "linux,bash,docker,networking",
-            "location": "Remote",
-            "apply_instructions": "Attach certification list and recent project experience.",
-            "apply_url": "",
-        },
-        {
-            "title": "UI Designer",
-            "company": "Creative Hub",
-            "description": "Design modern and accessible user interfaces.",
-            "skills_required": "figma,ui design,ux,prototyping",
-            "location": "Bulacan, PH",
-            "apply_instructions": "Include Figma links and design case study.",
-            "apply_url": "",
-        },
-        {
-            "title": "Network Engineer",
-            "company": "DataLink",
-            "description": "Maintain network infrastructure and security.",
-            "skills_required": "networking,security,cisco,troubleshooting",
-            "location": "Quezon City",
-            "apply_instructions": "Submit resume plus network troubleshooting experience summary.",
-            "apply_url": "",
-        },
-    ]
-    Job.objects.bulk_create([Job(**item) for item in seed_jobs])
+def _remove_legacy_sample_jobs():
+    Job.objects.filter(title__in=LEGACY_SAMPLE_JOB_TITLES).delete()
+
+
+def _infer_skills_from_text(*texts):
+    blob = " ".join(str(text or "").lower() for text in texts)
+    compact = re.sub(r"\s+", " ", blob)
+    found = [skill for skill in SKILL_KEYWORDS if skill in compact]
+    return ",".join(dict.fromkeys(found))
 
 
 def _normalize_api_jobs(payload):
@@ -133,6 +124,15 @@ def _normalize_api_jobs(payload):
 
 
 def _sync_jobs_from_source(force=False):
+    if not force and Job.objects.exists():
+        return False
+
+    if JOB_SOURCE_API_URL:
+        return _sync_jobs_from_custom_source(force=force)
+    return _sync_jobs_from_adzuna(force=force)
+
+
+def _sync_jobs_from_custom_source(force=False):
     if not JOB_SOURCE_API_URL:
         return False
     if not force and Job.objects.exists():
@@ -153,7 +153,75 @@ def _sync_jobs_from_source(force=False):
     normalized_jobs = _normalize_api_jobs(data)
     if not normalized_jobs:
         return False
+    _upsert_jobs(normalized_jobs)
+    return True
 
+
+def _sync_jobs_from_adzuna(force=False):
+    if not force and Job.objects.exists():
+        return False
+
+    adzuna_app_id = ADZUNA_APP_ID
+    adzuna_app_key = ADZUNA_APP_KEY
+    if not adzuna_app_id or not adzuna_app_key:
+        return False
+
+    query = quote_plus("developer")
+    country = str(ADZUNA_COUNTRY or "us").strip().lower() or "us"
+    adzuna_results = []
+    for page in range(1, ADZUNA_MAX_PAGES + 1):
+        adzuna_url = (
+            f"{ADZUNA_API_URL}/{country}/search/{page}"
+            f"?app_id={adzuna_app_id}&app_key={adzuna_app_key}"
+            f"&results_per_page=30&what={query}"
+        )
+        req = Request(adzuna_url, headers={"Accept": "application/json"}, method="GET")
+        try:
+            with urlopen(req, timeout=15) as res:
+                payload = json.loads(res.read().decode("utf-8"))
+        except (URLError, HTTPError, TimeoutError, json.JSONDecodeError):
+            continue
+
+        page_results = payload.get("results", []) if isinstance(payload, dict) else []
+        if not isinstance(page_results, list) or not page_results:
+            continue
+        adzuna_results.extend(page_results)
+
+    if not adzuna_results:
+        return False
+
+    normalized_jobs = []
+    seen = set()
+    for item in adzuna_results:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()
+        if not title:
+            continue
+        company = str((item.get("company") or {}).get("display_name") or "Unknown Company").strip()
+        location = str((item.get("location") or {}).get("display_name") or "Remote").strip()
+        apply_url = str(item.get("redirect_url") or "").strip()
+        unique_key = (title.lower(), company.lower(), location.lower(), apply_url.lower())
+        if unique_key in seen:
+            continue
+        seen.add(unique_key)
+        normalized_jobs.append({
+            "title": title,
+            "company": company,
+            "description": str(item.get("description") or "").strip(),
+            "skills_required": _infer_skills_from_text(title, item.get("description")),
+            "location": location,
+            "apply_instructions": "Apply using the link below.",
+            "apply_url": apply_url,
+        })
+
+    if not normalized_jobs:
+        return False
+    _upsert_jobs(normalized_jobs)
+    return True
+
+
+def _upsert_jobs(normalized_jobs):
     for job_data in normalized_jobs:
         job, _created = Job.objects.get_or_create(
             title=job_data["title"],
@@ -164,7 +232,6 @@ def _sync_jobs_from_source(force=False):
         for field, value in job_data.items():
             setattr(job, field, value)
         job.save()
-    return True
 
 
 def user_logout(request):
@@ -275,10 +342,10 @@ def google_login_callback(request):
         user = User.objects.create_user(
             username=username,
             email=email,
-            password=User.objects.make_random_password(),
+            password=secrets.token_urlsafe(32),
         )
 
-    auth_login(request, user)
+    auth_login(request, user, backend='django.contrib.auth.backends.ModelBackend')
     return redirect('/dashboard/')
 
 # 🔹 HOME PAGE
@@ -308,6 +375,7 @@ def register(request):
 
 # 🔹 DASHBOARD (PROTECTED)
 @login_required
+@ensure_csrf_cookie
 def match_page(request):
     return render(request, 'jobs/match.html')
 
@@ -431,13 +499,31 @@ def toggle_save_job(request, job_id):
     return Response({"saved": True, "message": "Job saved successfully."})
 
 
+@api_view(['GET'])
+def saved_jobs(request):
+    if not _is_api_authenticated(request):
+        return Response({"detail": "Invalid API credentials."}, status=401)
+    if not request.user.is_authenticated:
+        return Response({"detail": "Login required."}, status=401)
+
+    rows = SavedJob.objects.filter(user_name=request.user.username).select_related("job").order_by("-id")
+    return Response([
+        {
+            "id": row.job.id,
+            "title": row.job.title,
+            "company": row.job.company,
+            "location": row.job.location,
+        }
+        for row in rows
+    ])
+
+
 @api_view(['POST'])
 def refresh_jobs(request):
     if not _is_api_authenticated(request):
         return Response({"detail": "Invalid API credentials."}, status=401)
     synced = _sync_jobs_from_source(force=True)
-    if not synced and not Job.objects.exists():
-        _seed_jobs()
+    _remove_legacy_sample_jobs()
     return Response({
         "synced": synced,
         "count": Job.objects.count(),
