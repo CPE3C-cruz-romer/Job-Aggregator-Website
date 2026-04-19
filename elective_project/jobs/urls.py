@@ -1,6 +1,24 @@
 from django.urls import path
-from .views import job_list, job_detail, toggle_save_job, saved_jobs, job_with_match, match_user_skills, match_resume_skills, refresh_jobs, home_page, about_page
-from .views import register, user_login, user_logout, google_login_start, google_login_callback
+from .views import (
+    about_page,
+    employer_dashboard,
+    employer_login,
+    employer_register,
+    google_login_callback,
+    google_login_start,
+    home_page,
+    job_detail,
+    job_list,
+    job_with_match,
+    match_resume_skills,
+    match_user_skills,
+    refresh_jobs,
+    register,
+    saved_jobs,
+    toggle_save_job,
+    user_login,
+    user_logout,
+)
 
 urlpatterns = [
     path('jobs/', job_list),
@@ -19,4 +37,7 @@ urlpatterns = [
     path('auth/google/', google_login_start, name='google_login_start'),
     path('auth/google/callback/', google_login_callback, name='google_login_callback'),
     path('logout/', user_logout, name='logout'),  # ✅ ADD name
+    path('employers/register/', employer_register, name='employer_register'),
+    path('employers/login/', employer_login, name='employer_login'),
+    path('employers/dashboard/', employer_dashboard, name='employer_dashboard'),
 ]

@@ -15,7 +15,8 @@ import re
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from .models import Job, UserProfile, SavedJob
+from .forms import EmployerJobForm, EmployerRegistrationForm
+from .models import EmployerJob, EmployerProfile, Job, UserProfile, SavedJob
 from .serializers import JobSerializer
 from .ai import match_skills, extract_skills_from_resume
 
@@ -274,6 +275,8 @@ def user_login(request):
 def google_login_start(request):
     if not GOOGLE_OAUTH_ENABLED:
         return redirect('/login/?google_error=missing-config')
+    next_url = request.GET.get("next", "/dashboard/").strip() or "/dashboard/"
+    request.session["google_oauth_next"] = next_url
     auth_params = {
         "client_id": GOOGLE_OAUTH_CLIENT_ID,
         "redirect_uri": GOOGLE_OAUTH_REDIRECT_URI,
@@ -346,7 +349,16 @@ def google_login_callback(request):
         )
 
     auth_login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-    return redirect('/dashboard/')
+    next_url = request.session.pop("google_oauth_next", "/dashboard/")
+    return redirect(next_url)
+
+
+def _ensure_employer_profile(user):
+    defaults = {
+        "company_name": user.email.split("@")[0].strip().title() if user.email else user.username,
+    }
+    profile, _created = EmployerProfile.objects.get_or_create(user=user, defaults=defaults)
+    return profile
 
 # 🔹 HOME PAGE
 def home_page(request):
@@ -370,6 +382,70 @@ def register(request):
     return render(request, 'jobs/register.html', {
         'form': form,
         'google_oauth_enabled': GOOGLE_OAUTH_ENABLED,
+    })
+
+
+def employer_register(request):
+    if request.method == "POST":
+        form = EmployerRegistrationForm(request.POST)
+        if form.is_valid():
+            user = User.objects.create_user(
+                username=form.cleaned_data["username"],
+                email=form.cleaned_data["email"],
+                password=form.cleaned_data["password1"],
+            )
+            EmployerProfile.objects.create(
+                user=user,
+                company_name=form.cleaned_data["company_name"],
+            )
+            auth_login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+            return redirect('/employers/dashboard/')
+    else:
+        form = EmployerRegistrationForm()
+
+    return render(request, 'jobs/employer_register.html', {
+        'form': form,
+        'google_oauth_enabled': GOOGLE_OAUTH_ENABLED,
+    })
+
+
+def employer_login(request):
+    error = ""
+    if request.method == "POST":
+        username = request.POST.get("username", "").strip()
+        password = request.POST.get("password", "").strip()
+        user = authenticate(request, username=username, password=password)
+        if user is None:
+            error = "Invalid username or password."
+        else:
+            _ensure_employer_profile(user)
+            auth_login(request, user)
+            return redirect("/employers/dashboard/")
+
+    return render(request, "jobs/employer_login.html", {
+        "error": error,
+        "google_oauth_enabled": GOOGLE_OAUTH_ENABLED,
+    })
+
+
+@login_required
+def employer_dashboard(request):
+    profile = _ensure_employer_profile(request.user)
+    if request.method == "POST":
+        form = EmployerJobForm(request.POST)
+        if form.is_valid():
+            employer_job = form.save(commit=False)
+            employer_job.employer = profile
+            employer_job.save()
+            return redirect("/employers/dashboard/")
+    else:
+        form = EmployerJobForm()
+
+    jobs = EmployerJob.objects.filter(employer=profile)
+    return render(request, "jobs/employer_dashboard.html", {
+        "form": form,
+        "jobs": jobs,
+        "profile": profile,
     })
 
 

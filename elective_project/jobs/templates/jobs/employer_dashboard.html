@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employer Dashboard - Job Aggregator</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #f3f4f6; }
+        .shell { max-width: 1100px; margin: 30px auto; padding: 0 16px; }
+        .grid { display: grid; gap: 20px; grid-template-columns: 1fr 1fr; }
+        .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; }
+        .job { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+        .badge { display: inline-block; background: #185FA5; color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 999px; }
+        input, textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 8px; margin-top: 6px; margin-bottom: 8px; padding: 10px; }
+        button { border: none; background: #185FA5; color: #fff; border-radius: 8px; padding: 10px 14px; font-weight: bold; }
+        @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <h1>{{ profile.company_name }} Employer Home</h1>
+        <p>Post jobs with contact details, work details, and requirements. Priority jobs are shown first.</p>
+        <div class="grid">
+            <section class="card">
+                <h2>Post New Job</h2>
+                <form method="post">
+                    {% csrf_token %}
+                    {{ form.as_p }}
+                    <button type="submit">Publish Job</button>
+                </form>
+            </section>
+            <section class="card">
+                <h2>Your Posted Jobs (Priority First)</h2>
+                {% for job in jobs %}
+                    <div class="job">
+                        {% if job.is_priority %}<span class="badge">Priority</span>{% endif %}
+                        <h3>{{ job.title }}</h3>
+                        <p><strong>Location:</strong> {{ job.location }}</p>
+                        <p><strong>Contact:</strong> {{ job.contact_number }} • {{ job.contact_email }}</p>
+                        <p><strong>Work Details:</strong> {{ job.work_details }}</p>
+                        <p><strong>Requirements:</strong> {{ job.requirements }}</p>
+                    </div>
+                {% empty %}
+                    <p>No jobs posted yet.</p>
+                {% endfor %}
+            </section>
+        </div>
+    </div>
+</body>
+</html>
