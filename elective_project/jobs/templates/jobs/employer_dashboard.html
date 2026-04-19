@@ -5,18 +5,28 @@
     <title>Employer Dashboard - Job Aggregator</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; background: #f3f4f6; }
-        .shell { max-width: 1100px; margin: 30px auto; padding: 0 16px; }
+        .shell { max-width: 1100px; margin: 30px auto; padding: 0 16px; position: relative; }
+        .top-actions { position: absolute; top: -6px; right: 16px; display: flex; gap: 8px; }
+        .top-link { text-decoration: none; border: 1px solid #d1d5db; background: #fff; color: #111827; border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 700; }
+        .top-link:hover { border-color: #185FA5; color: #185FA5; }
         .grid { display: grid; gap: 20px; grid-template-columns: 1fr 1fr; }
         .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; }
         .job { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
         .badge { display: inline-block; background: #185FA5; color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 999px; }
         input, textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 8px; margin-top: 6px; margin-bottom: 8px; padding: 10px; }
         button { border: none; background: #185FA5; color: #fff; border-radius: 8px; padding: 10px 14px; font-weight: bold; }
-        @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+        @media (max-width: 900px) {
+            .top-actions { position: static; justify-content: flex-end; margin-bottom: 10px; }
+            .grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
     <div class="shell">
+        <nav class="top-actions">
+            <a class="top-link" href="/about/">Meet the Team</a>
+            <a class="top-link" href="/">Go to User Home</a>
+        </nav>
         <h1>{{ profile.company_name }} Employer Home</h1>
         <p>Post jobs with contact details, work details, and requirements. Priority jobs are shown first.</p>
         <div class="grid">

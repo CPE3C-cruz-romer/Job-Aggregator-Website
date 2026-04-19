@@ -1,7 +1,10 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.decorators import login_required
+from django.core.management import call_command
 from django.conf import settings
+from django.db import OperationalError, ProgrammingError
+from django.db import connection
 from django.db.models import Q
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
@@ -67,7 +70,7 @@ LEGACY_SAMPLE_JOB_TITLES = {
 def _get_jobs():
     _sync_jobs_from_source()
     _remove_legacy_sample_jobs()
-    return Job.objects.all()
+    return Job.objects.all().order_by("-is_direct_employer", "-is_priority", "-id")
 
 
 def _remove_legacy_sample_jobs():
@@ -232,6 +235,10 @@ def _upsert_jobs(normalized_jobs):
         )
         for field, value in job_data.items():
             setattr(job, field, value)
+        if not job_data.get("is_direct_employer") and not job.is_direct_employer:
+            job.is_direct_employer = False
+            job.is_priority = False
+            job.employer = None
         job.save()
 
 
@@ -276,7 +283,12 @@ def google_login_start(request):
     if not GOOGLE_OAUTH_ENABLED:
         return redirect('/login/?google_error=missing-config')
     next_url = request.GET.get("next", "/dashboard/").strip() or "/dashboard/"
+    if not next_url.startswith("/"):
+        next_url = "/dashboard/"
+    oauth_state_token = secrets.token_urlsafe(16)
+    oauth_state = f"{oauth_state_token}:{next_url}"
     request.session["google_oauth_next"] = next_url
+    request.session["google_oauth_state_token"] = oauth_state_token
     auth_params = {
         "client_id": GOOGLE_OAUTH_CLIENT_ID,
         "redirect_uri": GOOGLE_OAUTH_REDIRECT_URI,
@@ -285,6 +297,7 @@ def google_login_start(request):
         "access_type": "online",
         "include_granted_scopes": "true",
         "prompt": "select_account",
+        "state": oauth_state,
     }
     auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(auth_params)}"
     return redirect(auth_url)
@@ -293,6 +306,15 @@ def google_login_start(request):
 def google_login_callback(request):
     if not GOOGLE_OAUTH_ENABLED:
         return redirect('/login/?google_error=missing-config')
+
+    state_value = request.GET.get("state", "").strip()
+    state_next_url = ""
+    if ":" in state_value:
+        state_token, state_path = state_value.split(":", 1)
+        if state_token and state_token == request.session.get("google_oauth_state_token"):
+            state_next_url = state_path.strip()
+    if state_next_url and not state_next_url.startswith("/"):
+        state_next_url = ""
 
     code = request.GET.get('code', '').strip()
     if not code:
@@ -349,7 +371,10 @@ def google_login_callback(request):
         )
 
     auth_login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-    next_url = request.session.pop("google_oauth_next", "/dashboard/")
+    next_url = request.session.pop("google_oauth_next", state_next_url or "/dashboard/")
+    request.session.pop("google_oauth_state_token", None)
+    if not str(next_url).startswith("/"):
+        next_url = "/dashboard/"
     return redirect(next_url)
 
 
@@ -360,6 +385,24 @@ def _ensure_employer_profile(user):
     profile, _created = EmployerProfile.objects.get_or_create(user=user, defaults=defaults)
     return profile
 
+
+def _ensure_employer_tables_ready():
+    required_tables = {
+        EmployerProfile._meta.db_table,
+        EmployerJob._meta.db_table,
+    }
+    existing_tables = set(connection.introspection.table_names())
+    if required_tables.issubset(existing_tables):
+        return True
+
+    try:
+        call_command("migrate", interactive=False, run_syncdb=True, verbosity=0)
+    except Exception:
+        return False
+
+    existing_tables = set(connection.introspection.table_names())
+    return required_tables.issubset(existing_tables)
+
 # 🔹 HOME PAGE
 def home_page(request):
     return render(request, 'jobs/home.html')
@@ -367,6 +410,25 @@ def home_page(request):
 
 def about_page(request):
     return render(request, 'jobs/about.html')
+
+
+def employer_home(request):
+    if not _ensure_employer_tables_ready():
+        return render(request, "jobs/employer_home.html", {
+            "google_oauth_enabled": GOOGLE_OAUTH_ENABLED,
+            "recent_jobs": [],
+            "employer_count": 0,
+            "listing_count": 0,
+        })
+    recent_jobs = EmployerJob.objects.select_related("employer").all()[:6]
+    employer_count = EmployerProfile.objects.count()
+    listing_count = EmployerJob.objects.count()
+    return render(request, "jobs/employer_home.html", {
+        "google_oauth_enabled": GOOGLE_OAUTH_ENABLED,
+        "recent_jobs": recent_jobs,
+        "employer_count": employer_count,
+        "listing_count": listing_count,
+    })
 
 
 # 🔹 REGISTER
@@ -386,6 +448,17 @@ def register(request):
 
 
 def employer_register(request):
+    error = ""
+    setup_error = request.GET.get("error", "").strip()
+    if setup_error == "employer-db-missing":
+        error = "Employer database tables are not ready yet. Please run migrations, then try again."
+    if not _ensure_employer_tables_ready():
+        return render(request, 'jobs/employer_register.html', {
+            'form': EmployerRegistrationForm(request.POST or None),
+            'google_oauth_enabled': GOOGLE_OAUTH_ENABLED,
+            'error': "Employer database tables are not ready yet. Please run migrations, then try again.",
+        })
+
     if request.method == "POST":
         form = EmployerRegistrationForm(request.POST)
         if form.is_valid():
@@ -394,10 +467,14 @@ def employer_register(request):
                 email=form.cleaned_data["email"],
                 password=form.cleaned_data["password1"],
             )
-            EmployerProfile.objects.create(
-                user=user,
-                company_name=form.cleaned_data["company_name"],
-            )
+            try:
+                EmployerProfile.objects.create(
+                    user=user,
+                    company_name=form.cleaned_data["company_name"],
+                )
+            except (OperationalError, ProgrammingError):
+                user.delete()
+                return redirect("/employers/register/?error=employer-db-missing")
             auth_login(request, user, backend='django.contrib.auth.backends.ModelBackend')
             return redirect('/employers/dashboard/')
     else:
@@ -406,11 +483,21 @@ def employer_register(request):
     return render(request, 'jobs/employer_register.html', {
         'form': form,
         'google_oauth_enabled': GOOGLE_OAUTH_ENABLED,
+        'error': error,
     })
 
 
 def employer_login(request):
     error = ""
+    setup_error = request.GET.get("error", "").strip()
+    if setup_error == "employer-db-missing":
+        error = "Employer database tables are not ready yet. Please run migrations, then try again."
+    if not _ensure_employer_tables_ready():
+        return render(request, "jobs/employer_login.html", {
+            "error": "Employer database tables are not ready yet. Please run migrations, then try again.",
+            "google_oauth_enabled": GOOGLE_OAUTH_ENABLED,
+        })
+
     if request.method == "POST":
         username = request.POST.get("username", "").strip()
         password = request.POST.get("password", "").strip()
@@ -418,7 +505,10 @@ def employer_login(request):
         if user is None:
             error = "Invalid username or password."
         else:
-            _ensure_employer_profile(user)
+            try:
+                _ensure_employer_profile(user)
+            except (OperationalError, ProgrammingError):
+                return redirect("/employers/login/?error=employer-db-missing")
             auth_login(request, user)
             return redirect("/employers/dashboard/")
 
@@ -430,13 +520,33 @@ def employer_login(request):
 
 @login_required
 def employer_dashboard(request):
-    profile = _ensure_employer_profile(request.user)
+    if not _ensure_employer_tables_ready():
+        return redirect("/employers/login/?error=employer-db-missing")
+    try:
+        profile = _ensure_employer_profile(request.user)
+    except (OperationalError, ProgrammingError):
+        return redirect("/employers/login/?error=employer-db-missing")
     if request.method == "POST":
         form = EmployerJobForm(request.POST)
         if form.is_valid():
             employer_job = form.save(commit=False)
             employer_job.employer = profile
             employer_job.save()
+            Job.objects.create(
+                title=employer_job.title,
+                company=profile.company_name,
+                description=employer_job.description,
+                skills_required=employer_job.requirements,
+                location=employer_job.location,
+                apply_instructions=(
+                    f"Direct employer contact: {employer_job.contact_email} | "
+                    f"{employer_job.contact_number}. {employer_job.work_details}"
+                ),
+                apply_url="",
+                is_direct_employer=True,
+                is_priority=employer_job.is_priority,
+                employer=profile,
+            )
             return redirect("/employers/dashboard/")
     else:
         form = EmployerJobForm()

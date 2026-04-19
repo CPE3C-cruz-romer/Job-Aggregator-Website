@@ -33,6 +33,8 @@
         .small { color:#6b7280; font-size:13px; }
         .match { color:#15803d; font-weight:bold; }
         .pill { display:inline-block; padding:4px 8px; border-radius:999px; background:#eef2ff; color:#1e40af; margin:2px; font-size:12px; }
+        .pill-priority { background:#fee2e2; color:#991b1b; }
+        .pill-direct { background:#dcfce7; color:#166534; }
 
         .camera-bottom { max-width:1100px; margin:0 auto 18px; background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px; }
         .camera-frame { width:min(100%, 430px); margin:0 auto; }
@@ -86,7 +88,7 @@
         </section>
 
         <section class="card">
-            <h2 style="margin-top:0;">Search Jobs (Adzuna-style Feed)</h2>
+            <h2 style="margin-top:0;">Search Jobs</h2>
             <p class="small">Search by role, company, location, or skills. Save jobs and reopen them from the saved list.</p>
             <input class="field" id="jobSearch" placeholder="Search jobs...">
             <button class="btn btn-primary" onclick="loadJobs()">Search</button>
@@ -451,7 +453,11 @@
 
             let html = '';
             data.forEach(job => {
-                html += `<div class="job" onclick="openJob(${job.id})"><div class="small">${job.company}</div><div class="job-title">${job.title}</div><div>${job.location}</div></div>`;
+                const badges = `
+                    ${job.is_direct_employer ? '<span class="pill pill-direct">Direct Employer</span>' : ''}
+                    ${job.is_priority ? '<span class="pill pill-priority">Priority</span>' : ''}
+                `;
+                html += `<div class="job" onclick="openJob(${job.id})"><div class="small">${job.company}</div><div class="job-title">${job.title}</div><div>${job.location}</div><div>${badges}</div></div>`;
             });
             document.getElementById('jobs').innerHTML = html;
             await loadSavedJobs();
@@ -488,6 +494,7 @@
                     <div><strong>Location:</strong> ${job.location}</div>
                     <div><strong>Description:</strong><br>${job.description || 'No description.'}</div>
                     <div><strong>Required Skills:</strong> ${job.skills_required || 'Not specified'}</div>
+                    <div>${job.is_direct_employer ? '<span class="pill pill-direct">Direct Employer Job</span>' : ''}${job.is_priority ? '<span class="pill pill-priority">Priority Listing</span>' : ''}</div>
                     <div><strong>How to Apply:</strong><br>${job.apply_instructions || 'Use the apply link below or contact the recruiter.'}</div>
                     ${job.apply_url ? `<div><strong>Apply Link:</strong> <a href="${job.apply_url}" target="_blank" rel="noopener noreferrer">${job.apply_url}</a></div>` : ''}
                     <button class="btn btn-primary" onclick="toggleSaveJob(${job.id})">${job.is_saved ? 'Saved ✓ (Click to Unsave)' : 'Save Job'}</button>
