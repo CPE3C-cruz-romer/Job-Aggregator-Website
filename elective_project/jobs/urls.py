@@ -2,6 +2,7 @@ from django.urls import path
 from .views import (
     about_page,
     employer_dashboard,
+    employer_home,
     employer_login,
     employer_register,
     google_login_callback,
@@ -37,6 +38,7 @@ urlpatterns = [
     path('auth/google/', google_login_start, name='google_login_start'),
     path('auth/google/callback/', google_login_callback, name='google_login_callback'),
     path('logout/', user_logout, name='logout'),  # ✅ ADD name
+    path('employers/', employer_home, name='employer_home'),
     path('employers/register/', employer_register, name='employer_register'),
     path('employers/login/', employer_login, name='employer_login'),
     path('employers/dashboard/', employer_dashboard, name='employer_dashboard'),

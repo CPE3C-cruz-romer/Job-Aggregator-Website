@@ -9,6 +9,15 @@ class Job(models.Model):
     location = models.CharField(max_length=100)
     apply_instructions = models.TextField(blank=True, default="")
     apply_url = models.URLField(blank=True, default="")
+    is_direct_employer = models.BooleanField(default=False)
+    is_priority = models.BooleanField(default=False)
+    employer = models.ForeignKey(
+        "EmployerProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="published_jobs",
+    )
 
     def __str__(self):
         return self.title
