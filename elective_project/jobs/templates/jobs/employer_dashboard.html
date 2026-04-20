@@ -4,6 +4,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Employer Dashboard - Job Aggregator</title>
     <style>
+<<<<<<< Updated upstream
         body { font-family: Arial, sans-serif; margin: 0; background: #f3f4f6; }
         .shell { max-width: 1100px; margin: 30px auto; padding: 0 16px; position: relative; }
         .top-actions { position: absolute; top: -6px; right: 16px; display: flex; gap: 8px; }
@@ -15,6 +16,23 @@
         .badge { display: inline-block; background: #185FA5; color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 999px; }
         input, textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 8px; margin-top: 6px; margin-bottom: 8px; padding: 10px; }
         button { border: none; background: #185FA5; color: #fff; border-radius: 8px; padding: 10px 14px; font-weight: bold; }
+=======
+        :root { --blue:#185FA5; --line:#dbe3ec; --bg:#f3f4f6; --ink:#111827; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: var(--bg); color: var(--ink); }
+        .shell { max-width: 1100px; margin: 30px auto; padding: 0 16px; position: relative; }
+        .top-actions { position: absolute; top: -6px; right: 16px; display: flex; gap: 8px; }
+        .top-link { text-decoration: none; border: 1px solid #d1d5db; background: #fff; color: var(--ink); border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 700; }
+        .top-link:hover { border-color: var(--blue); color: var(--blue); }
+        h1 { margin: 0 0 10px; font-family: 'Oswald', Arial, sans-serif; text-transform: uppercase; letter-spacing: 0.02em; }
+        p { color: #4b5563; margin-bottom: 10px; }
+        .grid { display: grid; gap: 20px; grid-template-columns: 1fr 1fr; }
+        .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+        .job { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 10px; background: #fcfdff; }
+        .badge { display: inline-block; background: var(--blue); color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 999px; }
+        input, textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 8px; margin-top: 6px; margin-bottom: 8px; padding: 10px; }
+        button { border: none; background: var(--blue); color: #fff; border-radius: 8px; padding: 10px 14px; font-weight: bold; }
+>>>>>>> Stashed changes
         .btn-delete { background: #dc2626; margin-top: 8px; }
         @media (max-width: 900px) {
             .top-actions { position: static; justify-content: flex-end; margin-bottom: 10px; }

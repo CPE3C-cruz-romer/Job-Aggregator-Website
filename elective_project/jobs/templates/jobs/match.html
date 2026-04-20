@@ -3,13 +3,14 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@700&display=swap" rel="stylesheet">
     <style>
-        :root { --blue:#1f6fe5; --line:#dbe3ec; --bg:#f3f4f6; --ink:#111827; }
+        :root { --blue:#185FA5; --blue-bright:#378ADD; --line:#dbe3ec; --bg:#f3f4f6; --ink:#111827; }
         * { box-sizing: border-box; }
         body { margin:0; font-family: Arial, sans-serif; background:var(--bg); color:var(--ink); }
         .topbar { background:#fff; border-bottom:1px solid var(--line); padding:14px 30px; }
         .topbar-inner { max-width:1100px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; }
-        .brand { font-weight:800; font-size:28px; text-decoration:none; color:#111; }
+        .brand { font-weight:800; font-size:28px; text-decoration:none; color:#111; font-family: 'Oswald', Arial, sans-serif; letter-spacing: 0.01em; }
         .brand span { color: var(--blue); }
         .nav a { margin-left:18px; text-decoration:none; color:#374151; font-size:14px; }
 
@@ -28,7 +29,7 @@
         #jobs { max-height: 420px; overflow:auto; padding-right:4px; }
         #results { max-height: 280px; overflow:auto; padding-right:4px; }
         .progress-wrap { width:100%; height:12px; background:#e5e7eb; border-radius:999px; overflow:hidden; margin:8px 0 6px; }
-        .progress-bar { width:0%; height:100%; background:linear-gradient(90deg, #1f6fe5, #3b82f6); transition: width .25s ease; }
+        .progress-bar { width:0%; height:100%; background:linear-gradient(90deg, var(--blue), var(--blue-bright)); transition: width .25s ease; }
         .category-box { border:1px solid var(--line); border-radius:10px; padding:10px; margin-top:8px; background:#f9fbff; }
         .small { color:#6b7280; font-size:13px; }
         .match { color:#15803d; font-weight:bold; }
