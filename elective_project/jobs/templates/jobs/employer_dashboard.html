@@ -3,33 +3,55 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Employer Dashboard - Job Aggregator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; background: #f3f4f6; }
-        .shell { max-width: 1100px; margin: 30px auto; padding: 0 16px; position: relative; }
-        .top-actions { position: absolute; top: -6px; right: 16px; display: flex; gap: 8px; }
-        .top-link { text-decoration: none; border: 1px solid #d1d5db; background: #fff; color: #111827; border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 700; }
-        .top-link:hover { border-color: #185FA5; color: #185FA5; }
-        .grid { display: grid; gap: 20px; grid-template-columns: 1fr 1fr; }
-        .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; }
-        .job { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
-        .badge { display: inline-block; background: #185FA5; color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 999px; }
-        input, textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 8px; margin-top: 6px; margin-bottom: 8px; padding: 10px; }
-        button { border: none; background: #185FA5; color: #fff; border-radius: 8px; padding: 10px 14px; font-weight: bold; }
-        .btn-delete { background: #dc2626; margin-top: 8px; }
-        @media (max-width: 900px) {
-            .top-actions { position: static; justify-content: flex-end; margin-bottom: 10px; }
-            .grid { grid-template-columns: 1fr; }
+        :root { --blue:#185FA5; --blue-bright:#378ADD; --line:#dbe3ec; --bg:#f3f4f6; --ink:#111827; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: var(--bg); color: var(--ink); }
+        .topbar { background:#fff; border-bottom:1px solid var(--line); padding:14px 30px; }
+        .topbar-inner { max-width:1100px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; }
+        .brand { font-weight:800; font-size:26px; text-decoration:none; color:#111; }
+        .brand span { color: var(--blue); }
+        .nav a { margin-left:18px; text-decoration:none; color:#374151; font-size:14px; }
+        .hero { background:#0f172a; padding:48px 20px; text-align:center; }
+        .hero h1 { font-family:'Oswald', Arial, sans-serif; font-size:clamp(30px,5vw,50px); color:#fff; text-transform: uppercase; }
+        .hero h1 span { color: var(--blue-bright); }
+        .hero p { color:#94a3b8; margin-top:10px; }
+        .content { max-width:1100px; margin:24px auto; padding:0 20px; }
+        .grid { display:grid; gap:18px; grid-template-columns:1fr 1fr; }
+        .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px; }
+        .card h2 { margin-bottom:12px; }
+        .job { border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px; }
+        .badge { display:inline-block; background:#e6f1fb; color:#185FA5; font-size:11px; padding:3px 8px; border-radius:999px; font-weight: 700; }
+        input, textarea, select { width:100%; border:1px solid #d1d5db; border-radius:8px; margin-top:6px; margin-bottom:8px; padding:10px; }
+        button { border:none; background:#185FA5; color:#fff; border-radius:8px; padding:10px 14px; font-weight:700; cursor: pointer; }
+        .btn-delete { background:#dc2626; margin-top:8px; }
+        .footer { margin-top:35px; border-top:1px solid var(--line); text-align:center; padding:22px 10px; font-size:12px; color:#d1d5db; background:#000; line-height:1.8; }
+        @media (max-width:900px){
+            .topbar { padding:12px 14px; }
+            .topbar-inner { flex-direction: column; gap: 8px; }
+            .nav a { margin-left:0; }
+            .grid { grid-template-columns:1fr; }
         }
     </style>
 </head>
 <body>
-    <div class="shell">
-        <nav class="top-actions">
-            <a class="top-link" href="/about/">Meet the Team</a>
-            <a class="top-link" href="/">Go to User Home</a>
-        </nav>
-        <h1>{{ profile.company_name }} Employer Home</h1>
-        <p>Post jobs with contact details, work details, and requirements. All employer jobs are posted as priority.</p>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a class="brand" href="/">Job <span>Aggregator</span></a>
+            <nav class="nav">
+                <a href="/employers/">Employer Home</a>
+                <a href="/about/">Meet the Team</a>
+            </nav>
+        </div>
+    </header>
+
+    <section class="hero">
+        <h1>{{ profile.company_name }} <span>Dashboard</span></h1>
+        <p>Post, prioritize, and manage your company listings from one place.</p>
+    </section>
+
+    <main class="content">
         <div class="grid">
             <section class="card">
                 <h2>Post New Job</h2>
@@ -59,6 +81,11 @@
                 {% endfor %}
             </section>
         </div>
-    </div>
+    </main>
+
+    <footer class="footer">
+        © 2026 Job Aggregator. Built by BulSU Students.<br>
+        Romer Cholo Cruz • Allan Valenzuela • Hugh Ariff Aserit • Eisen Liam
+    </footer>
 </body>
 </html>
