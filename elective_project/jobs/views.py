@@ -21,7 +21,7 @@ from rest_framework.response import Response
 from .forms import EmployerJobForm, EmployerRegistrationForm
 from .models import EmployerJob, EmployerProfile, Job, UserProfile, SavedJob
 from .serializers import JobSerializer
-from .ai import match_skills, extract_skills_from_resume
+from .ai import match_skills, extract_skills_from_resume, analyze_resume_against_job
 
 from django.contrib.auth import authenticate, login as auth_login
 from django.contrib.auth import logout
@@ -531,6 +531,7 @@ def employer_dashboard(request):
         if form.is_valid():
             employer_job = form.save(commit=False)
             employer_job.employer = profile
+            employer_job.is_priority = True
             employer_job.save()
             Job.objects.create(
                 title=employer_job.title,
@@ -544,7 +545,7 @@ def employer_dashboard(request):
                 ),
                 apply_url="",
                 is_direct_employer=True,
-                is_priority=employer_job.is_priority,
+                is_priority=True,
                 employer=profile,
             )
             return redirect("/employers/dashboard/")
@@ -557,6 +558,33 @@ def employer_dashboard(request):
         "jobs": jobs,
         "profile": profile,
     })
+
+
+@login_required
+def delete_employer_job(request, job_id):
+    if request.method != "POST":
+        return redirect("/employers/dashboard/")
+    if not _ensure_employer_tables_ready():
+        return redirect("/employers/login/?error=employer-db-missing")
+    try:
+        profile = _ensure_employer_profile(request.user)
+    except (OperationalError, ProgrammingError):
+        return redirect("/employers/login/?error=employer-db-missing")
+
+    try:
+        employer_job = EmployerJob.objects.get(id=job_id, employer=profile)
+    except EmployerJob.DoesNotExist:
+        return redirect("/employers/dashboard/")
+
+    Job.objects.filter(
+        employer=profile,
+        is_direct_employer=True,
+        title=employer_job.title,
+        location=employer_job.location,
+        description=employer_job.description,
+    ).delete()
+    employer_job.delete()
+    return redirect("/employers/dashboard/")
 
 
 # 🔹 DASHBOARD (PROTECTED)
@@ -614,6 +642,7 @@ def match_resume_skills(request):
     if not _is_api_authenticated(request):
         return Response({"detail": "Invalid API credentials."}, status=401)
     resume_text = request.GET.get('resume_text', '')
+    job_description = request.GET.get('job_description', '')
     jobs = _get_jobs()
     skill_vocabulary = set()
 
@@ -625,6 +654,14 @@ def match_resume_skills(request):
 
     extracted_skills = extract_skills_from_resume(resume_text, skill_vocabulary)
     skill_text = ",".join(extracted_skills)
+
+    if job_description:
+        analysis = analyze_resume_against_job(
+            resume_text=resume_text,
+            job_description=job_description,
+            skill_vocabulary=skill_vocabulary,
+        )
+        return Response(analysis)
 
     results = []
     for job in jobs:

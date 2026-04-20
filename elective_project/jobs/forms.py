@@ -63,7 +63,6 @@ class EmployerJobForm(forms.ModelForm):
             "contact_email",
             "work_details",
             "requirements",
-            "is_priority",
         ]
         widgets = {
             "description": forms.Textarea(attrs={"rows": 3}),

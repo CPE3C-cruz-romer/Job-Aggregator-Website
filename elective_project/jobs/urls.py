@@ -3,6 +3,7 @@ from .views import (
     about_page,
     employer_dashboard,
     employer_home,
+    delete_employer_job,
     employer_login,
     employer_register,
     google_login_callback,
@@ -42,4 +43,5 @@ urlpatterns = [
     path('employers/register/', employer_register, name='employer_register'),
     path('employers/login/', employer_login, name='employer_login'),
     path('employers/dashboard/', employer_dashboard, name='employer_dashboard'),
+    path('employers/jobs/<int:job_id>/delete/', delete_employer_job, name='delete_employer_job'),
 ]
