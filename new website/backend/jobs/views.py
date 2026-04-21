@@ -426,6 +426,16 @@ class ResumeViewSet(viewsets.ModelViewSet):
         resume.save(update_fields=['image', 'file', 'extracted_text'])
         profile_data = parse_resume_profile(extracted_text)
         extracted_skills = profile_data['extracted_skills']
+        if not extracted_skills:
+            return Response(
+                {
+                    'error': (
+                        'No known skills were detected in the uploaded resume text. '
+                        'Please upload a clearer resume with a dedicated skills section.'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         selected_skills = random.sample(extracted_skills, min(3, len(extracted_skills))) if extracted_skills else []
         jobs = Job.objects.all()
         recommendations = {'extracted_skills': extracted_skills, 'profile': profile_data['profile'], 'recommended_jobs': []}

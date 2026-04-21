@@ -41,7 +41,7 @@ const ResumePage = () => {
       return;
     }
     const skillsQuery = encodeURIComponent(selectedSkills.join(','));
-    const { data } = await api.get(`/jobs/?skills=${skillsQuery}&randomize=1`);
+    const { data } = await api.get(`/jobs/?skills=${skillsQuery}&randomize=1&t=${Date.now()}`);
     setAutoJobs(Array.isArray(data) ? data : []);
   };
 
@@ -83,11 +83,17 @@ const ResumePage = () => {
       }
 
       const skillsFromResume = data?.extracted_skills || data?.recommendations?.extracted_skills || [];
-      const randomSkills = pickRandomSkills(skillsFromResume, 3);
+      if (!Array.isArray(skillsFromResume) || skillsFromResume.length === 0) {
+        throw new Error('No skills extracted from resume.');
+      }
+
+      const randomSkills = Array.isArray(data?.selected_skills) && data.selected_skills.length > 0
+        ? data.selected_skills
+        : pickRandomSkills(skillsFromResume, 3);
       setSelectedSkills(randomSkills);
       await fetchJobsForSelectedSkills(randomSkills);
 
-      const matchedSkills = data?.recommendations?.extracted_skills || data?.extracted_skills || [];
+      const matchedSkills = randomSkills;
       window.dispatchEvent(new CustomEvent('jobs:refresh-requested', { detail: { matchedSkills } }));
     } catch (err) {
       setError(parseApiError(err, 'Failed to upload resume.'));
