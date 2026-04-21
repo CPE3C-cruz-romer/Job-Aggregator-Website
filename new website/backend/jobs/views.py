@@ -216,10 +216,30 @@ class JobViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        skills_param = (self.request.query_params.get('skills') or '').strip()
+        if skills_param:
+            skills = [skill.strip() for skill in skills_param.split(',') if skill.strip()]
+            if skills:
+                skills_query = Q()
+                for skill in skills:
+                    skills_query |= (
+                        Q(title__icontains=skill)
+                        | Q(description__icontains=skill)
+                        | Q(requirements__icontains=skill)
+                        | Q(company__icontains=skill)
+                        | Q(location__icontains=skill)
+                    )
+                queryset = queryset.filter(skills_query)
+
         randomize = str(self.request.query_params.get('randomize', '1')).lower()
-        if randomize not in {'0', 'false', 'no'}:
-            return queryset.order_by('?')
-        return queryset.order_by('-priority_score', '-created_at')
+        if self.action == 'list':
+            if randomize not in {'0', 'false', 'no'}:
+                queryset = queryset.order_by('?')
+            else:
+                queryset = queryset.order_by('-priority_score', '-created_at')
+            return queryset[:10]
+
+        return queryset
 
     def initial(self, request, *args, **kwargs):
         try:
@@ -408,47 +428,15 @@ class ResumeViewSet(viewsets.ModelViewSet):
         extracted_skills = profile_data['extracted_skills']
         selected_skills = random.sample(extracted_skills, min(3, len(extracted_skills))) if extracted_skills else []
         jobs = Job.objects.all()
-        refresh_result = None
         recommendations = {'extracted_skills': extracted_skills, 'profile': profile_data['profile'], 'recommended_jobs': []}
-        selected_skill_jobs = []
-
-        if selected_skills:
-            preferred_query = ' '.join(selected_skills)
-            refresh_result = fetch_jobs_from_adzuna(
-                query=preferred_query,
-                location='united states',
-                results_per_page=30,
-                pages=2,
-            )
-            jobs = Job.objects.all()
-        elif not jobs.exists():
-            refresh_result = fetch_jobs_from_adzuna(
-                query='software engineer',
-                location='united states',
-                results_per_page=30,
-                pages=2,
-            )
-            jobs = Job.objects.all()
-
         if jobs.exists():
             recommendations = recommend_jobs_for_skills(extracted_text, jobs)
-            if selected_skills:
-                selected_query = Q()
-                for skill in selected_skills:
-                    selected_query |= Q(title__icontains=skill) | Q(description__icontains=skill)
-                selected_skill_jobs = JobSerializer(
-                    jobs.filter(selected_query).order_by('?')[:20],
-                    many=True,
-                ).data
 
         payload = self.get_serializer(resume).data
         payload['extracted_skills'] = extracted_skills
         payload['selected_skills'] = selected_skills
         payload['profile'] = profile_data['profile']
         payload['recommendations'] = recommendations
-        payload['jobs_from_selected_skills'] = selected_skill_jobs
-        if refresh_result is not None:
-            payload['jobs_refresh'] = refresh_result
         return Response(payload, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['get'])
