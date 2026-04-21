@@ -8,13 +8,18 @@ load_dotenv(BASE_DIR / '.env')
 
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-secret-key-change-me')
 DEBUG = os.getenv('DEBUG', '1') == '1'
-ALLOWED_HOSTS = [
-    'romer.pythonanywhere.com',
-    'cpe3cjobaggregator.com',
-    'www.cpe3cjobaggregator.com',
-    '127.0.0.1',
-    'localhost'
-]
+
+
+def _split_csv(value):
+    return [item.strip() for item in value.split(',') if item.strip()]
+
+
+ALLOWED_HOSTS = _split_csv(
+    os.getenv(
+        'ALLOWED_HOSTS',
+        'romer.pythonanywhere.com,cpe3cjobaggregator.com,www.cpe3cjobaggregator.com,job-aggregator-website.onrender.com,127.0.0.1,localhost'
+    )
+)
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -95,7 +100,15 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
+CORS_ALLOWED_ORIGINS = _split_csv(
+    os.getenv(
+        'CORS_ALLOWED_ORIGINS',
+        'http://localhost:3000,http://127.0.0.1:3000'
+    )
+)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r'^https://.*\.vercel\.app$',
+]
 
 REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': (
