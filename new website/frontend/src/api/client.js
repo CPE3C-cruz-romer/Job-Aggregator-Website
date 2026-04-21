@@ -1,9 +1,11 @@
 import axios from 'axios';
 
-const DEFAULT_API_URL =
-  process.env.NODE_ENV === 'development'
-    ? 'http://127.0.0.1:8000/api'
-    : 'https://job-aggregator-website.onrender.com/api';
+const isLocalhost = typeof window !== 'undefined'
+  && ['localhost', '127.0.0.1', 'https://job-aggregator-website.vercel.app'].includes(window.location.hostname);
+
+const DEFAULT_API_URL = isLocalhost
+  ? 'http://127.0.0.1:8000/api'
+  : 'https://job-aggregator-website.vercel.app/api';
 
 const rawBaseUrl =
   process.env.REACT_APP_API_URL ||
