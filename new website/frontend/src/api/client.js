@@ -28,6 +28,7 @@ const clearAuthState = () => {
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('user');
   localStorage.removeItem('isEmployer');
+  window.dispatchEvent(new Event('auth:changed'));
 };
 
 api.interceptors.request.use((config) => {
@@ -69,6 +70,7 @@ api.interceptors.response.use(
       const { data } = await refreshPromise;
       setAccessToken(data.access);
       refreshPromise = null;
+      window.dispatchEvent(new Event('auth:changed'));
 
       originalRequest.headers = originalRequest.headers || {};
       originalRequest.headers.Authorization = `Bearer ${data.access}`;

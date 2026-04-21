@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { parseApiError } from '../utils/error';
 
@@ -11,6 +12,7 @@ const EMPTY_FORM = {
 };
 
 const EmployerHomePage = () => {
+  const navigate = useNavigate();
   const [jobs, setJobs] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
@@ -26,7 +28,12 @@ const EmployerHomePage = () => {
       if (profile?.company_name) {
         setForm((prev) => ({ ...prev, company: profile.company_name }));
       }
-    } catch {
+    } catch (error) {
+      if (error?.response?.status === 401) {
+        setMessage('Session expired. Please login as employer again.');
+        navigate('/employer/login');
+        return;
+      }
       // Keep a blank company field if profile is unavailable.
     }
   };
@@ -36,6 +43,11 @@ const EmployerHomePage = () => {
       const { data } = await api.get('/employer/jobs/');
       setJobs(data);
     } catch (error) {
+      if (error?.response?.status === 401) {
+        setMessage('Session expired. Please login as employer again.');
+        navigate('/employer/login');
+        return;
+      }
       setMessage(parseApiError(error, 'Failed to load employer jobs.'));
       setJobs([]);
     }
