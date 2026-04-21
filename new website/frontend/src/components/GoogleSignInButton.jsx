@@ -9,7 +9,9 @@ const GoogleSignInButton = ({ onCredential, onError }) => {
     setReady(false);
 
     if (!clientId) {
-      onError?.('Google login is disabled: missing REACT_APP_GOOGLE_CLIENT_ID in frontend/.env');
+      onError?.(
+        'Google login is disabled: missing REACT_APP_GOOGLE_CLIENT_ID. Set it in frontend/.env (local) or in your Vercel Environment Variables.'
+      );
       return;
     }
 
