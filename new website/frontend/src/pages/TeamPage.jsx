@@ -1,12 +1,11 @@
 import React from 'react';
 
 const members = [
-  { name: 'Romer Cholo Cruz', role: 'Project Lead', image: '/team/romer-cholo-cruz.jpeg' },
-  { name: 'Eisen Liam Palsat', role: 'AI Researcher', image: '/team/eisen-liam-palsat.jpeg' },
-  { name: 'Allan Allan Paul Valenzuela', role: 'Frontend Specialist', image: '/team/allan-allan-paul-valenzuela.jpeg' },
+  { name: 'Romer Cholo Cruz', role: 'Project Leader', image: '/team/romer-cholo-cruz.jpeg' },
+  { name: 'Eisen Liam Pahati', role: 'AI Researcher', image: '/team/eisen-liam-palsat.jpeg' },
+  { name: 'Allane Allan Paul Valenzuela', role: 'Frontend Specialist', image: '/team/allan-allan-paul-valenzuela.jpeg' },
   { name: 'Hugh Ariff Aserit', role: 'Backend Developer', image: '/team/hugh-ariff-aserit.jpeg' },
 ];
-
 const TeamPage = () => (
   <section className="page">
     <div className="hero compact">
