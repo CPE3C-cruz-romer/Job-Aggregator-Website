@@ -1,15 +1,13 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useMemo, useState } from 'react';
 import api from '../api/client';
 
 const AuthContext = createContext(null);
 
-const readUserFromStorage = () => {
-  const raw = localStorage.getItem('user');
-  return raw ? JSON.parse(raw) : null;
-};
-
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(readUserFromStorage);
+  const [user, setUser] = useState(() => {
+    const raw = localStorage.getItem('user');
+    return raw ? JSON.parse(raw) : null;
+  });
   const [isEmployer, setIsEmployer] = useState(() => localStorage.getItem('isEmployer') === '1');
 
   const syncAuth = (data) => {
@@ -19,7 +17,6 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('isEmployer', data.is_employer ? '1' : '0');
     setUser(data.user);
     setIsEmployer(Boolean(data.is_employer));
-    window.dispatchEvent(new Event('auth:changed'));
   };
 
   const login = async (username, password) => {
@@ -51,28 +48,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
-    localStorage.removeItem('isEmployer');
+    localStorage.clear();
     setUser(null);
     setIsEmployer(false);
-    window.dispatchEvent(new Event('auth:changed'));
   };
-
-  useEffect(() => {
-    const syncFromStorage = () => {
-      setUser(readUserFromStorage());
-      setIsEmployer(localStorage.getItem('isEmployer') === '1');
-    };
-
-    window.addEventListener('storage', syncFromStorage);
-    window.addEventListener('auth:changed', syncFromStorage);
-    return () => {
-      window.removeEventListener('storage', syncFromStorage);
-      window.removeEventListener('auth:changed', syncFromStorage);
-    };
-  }, []);
 
   const value = useMemo(
     () => ({ user, isEmployer, login, loginEmployer, loginWithGoogle, register, registerEmployer, logout }),

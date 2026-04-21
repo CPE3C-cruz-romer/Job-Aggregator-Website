@@ -21,50 +21,6 @@ ALLOWED_HOSTS = _env_csv(
 )
 
 
-def _env_csv(name: str, default: str) -> list[str]:
-    value = os.getenv(name, default)
-    return [item.strip() for item in value.split(',') if item.strip()]
-
-
-ALLOWED_HOSTS = _env_csv(
-    'ALLOWED_HOSTS',
-    '127.0.0.1,localhost,job-aggregator-website.onrender.com',
-)
-
-
-def _env_csv(name: str, default: str) -> list[str]:
-    value = os.getenv(name, default)
-    return [item.strip() for item in value.split(',') if item.strip()]
-
-
-ALLOWED_HOSTS = _env_csv(
-    'ALLOWED_HOSTS',
-    '127.0.0.1,localhost,job-aggregator-website.onrender.com',
-)
-
-
-def _env_csv(name: str, default: str) -> list[str]:
-    value = os.getenv(name, default)
-    return [item.strip() for item in value.split(',') if item.strip()]
-
-
-ALLOWED_HOSTS = _env_csv(
-    'ALLOWED_HOSTS',
-    '127.0.0.1,localhost,job-aggregator-website.onrender.com',
-)
-
-
-def _env_csv(name: str, default: str) -> list[str]:
-    value = os.getenv(name, default)
-    return [item.strip() for item in value.split(',') if item.strip()]
-
-
-ALLOWED_HOSTS = _env_csv(
-    'ALLOWED_HOSTS',
-    '127.0.0.1,localhost,job-aggregator-website.onrender.com',
-)
-
-
 def _split_csv(value):
     return [item.strip() for item in value.split(',') if item.strip()]
 

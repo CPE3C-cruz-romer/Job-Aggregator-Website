@@ -32,7 +32,6 @@ from .services import (
     has_meaningful_resume_text,
     match_resume_skills,
     recommend_jobs_for_skills,
-    extract_skills_from_text,
 )
 from .db_ready import ensure_db_ready
 
@@ -209,23 +208,6 @@ class JobViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
     search_fields = ['title', 'location', 'company', 'description']
 
-    @staticmethod
-    def _pick_param(request, *names, default=''):
-        for name in names:
-            value = request.GET.get(name)
-            if value is None and hasattr(request, 'data'):
-                value = request.data.get(name)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-        return default
-
-    @staticmethod
-    def _safe_int(value, default):
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return default
-
     def initial(self, request, *args, **kwargs):
         try:
             ensure_db_ready()
@@ -233,19 +215,17 @@ class JobViewSet(viewsets.ModelViewSet):
             raise APIException(f'Database initialization failed: {str(exc)}') from exc
         return super().initial(request, *args, **kwargs)
 
-    @action(detail=False, methods=['get', 'post'], authentication_classes=[], permission_classes=[AllowAny])
+    @action(detail=False, methods=['post'], authentication_classes=[], permission_classes=[AllowAny])
     def refresh(self, request):
         try:
             ensure_db_ready()
         except Exception as exc:
             return Response({'error': f'Database initialization failed: {str(exc)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        query = self._pick_param(request, 'search', 'query', 'keyword', default='developer')
-        location = self._pick_param(request, 'where', 'location', default='united states')
-        results_per_page = self._safe_int(self._pick_param(request, 'results_per_page', default='50'), 50)
-        page = self._safe_int(self._pick_param(request, 'page', default='1'), 1)
-        pages = self._safe_int(self._pick_param(request, 'pages', default=str(page)), page)
-
+        query = request.data.get('query', 'software engineer')
+        location = request.data.get('location', 'united states')
+        results_per_page = int(request.data.get('results_per_page', 50))
+        pages = int(request.data.get('pages', 3))
         result = fetch_jobs_from_adzuna(
             query=query,
             location=location,
@@ -255,14 +235,7 @@ class JobViewSet(viewsets.ModelViewSet):
 
         if result['error']:
             return Response({'error': result['error']}, status=status.HTTP_400_BAD_REQUEST)
-
-        response_payload = {
-            **result,
-            'query': query,
-            'where': location,
-            'page': max(1, min(pages, 5)),
-        }
-        return Response(response_payload)
+        return Response(result)
 
 
 class EmployerProfileViewSet(viewsets.ReadOnlyModelViewSet):
@@ -360,22 +333,6 @@ class ResumeViewSet(viewsets.ModelViewSet):
     serializer_class = ResumeSerializer
     permission_classes = [IsAuthenticated]
 
-
-    def _refresh_jobs_for_resume(self, resume_text, request):
-        extracted_skills = extract_skills_from_text(resume_text)
-        location = (request.query_params.get('where') or request.query_params.get('location') or 'united states').strip()
-        search_query = (request.query_params.get('search') or request.query_params.get('query') or '').strip()
-        if not search_query:
-            signal_skills = [skill for skill in extracted_skills if len(skill.split()) <= 3]
-            search_query = ' '.join(signal_skills[:3]) or 'developer'
-
-        return fetch_jobs_from_adzuna(
-            query=search_query,
-            location=location or 'united states',
-            results_per_page=30,
-            pages=2,
-        )
-
     def get_queryset(self):
         return Resume.objects.filter(user=self.request.user)
 
@@ -455,8 +412,6 @@ class ResumeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        refresh_result = self._refresh_jobs_for_resume(resume.extracted_text, request)
-
         jobs = Job.objects.all()
         if not jobs.exists():
             return Response({'error': 'No jobs available for matching yet.'}, status=status.HTTP_404_NOT_FOUND)
@@ -468,10 +423,7 @@ class ResumeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        response_payload = {**recommendation_data, 'refresh': refresh_result}
-        if refresh_result.get('error'):
-            response_payload['refresh_warning'] = refresh_result['error']
-        return Response(response_payload, status=status.HTTP_200_OK)
+        return Response(recommendation_data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'])
     def skill_match(self, request):
@@ -482,12 +434,10 @@ class ResumeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        refresh_result = self._refresh_jobs_for_resume(resume.extracted_text, request)
-
         job_id = request.query_params.get('job_id')
         job = Job.objects.filter(id=job_id).first()
         if not job:
             return Response({'detail': 'Job not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         result = match_resume_skills(resume.extracted_text, job.description)
-        return Response({'job_id': job.id, 'refresh': refresh_result, **result})
+        return Response({'job_id': job.id, **result})
