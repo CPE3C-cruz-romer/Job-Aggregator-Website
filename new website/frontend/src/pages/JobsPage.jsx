@@ -19,6 +19,7 @@ const JobsPage = () => {
       const { data } = await api.get(`/jobs/${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ''}`);
       console.log('Jobs loaded:', data);
       setJobs(data);
+      return data;
     } catch (error) {
       console.error('Job list fetch failed:', error);
       setMessage(parseApiError(error, 'Failed to fetch jobs. Please try again.'));
@@ -27,7 +28,16 @@ const JobsPage = () => {
     }
   };
 
-  useEffect(() => { loadJobs(); }, []);
+  useEffect(() => {
+    const initialLoad = async () => {
+      const initialJobs = await loadJobs();
+      if (Array.isArray(initialJobs) && initialJobs.length === 0) {
+        await refreshFromApi();
+      }
+    };
+
+    initialLoad();
+  }, []);
 
   const saveJob = async (jobId) => {
     const token = localStorage.getItem('accessToken');

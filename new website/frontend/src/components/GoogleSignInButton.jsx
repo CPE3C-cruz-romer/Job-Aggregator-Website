@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 
 const GoogleSignInButton = ({ onCredential, onError }) => {
   const containerRef = useRef(null);
+  const initializedRef = useRef(false);
   const [ready, setReady] = useState(false);
   const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
 
@@ -31,11 +32,14 @@ const GoogleSignInButton = ({ onCredential, onError }) => {
       if (!window.google?.accounts?.id) return false;
 
       try {
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: (resp) => onCredential?.(resp.credential),
-          ux_mode: 'popup',
-        });
+        if (!initializedRef.current) {
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            callback: (resp) => onCredential?.(resp.credential),
+            ux_mode: 'popup',
+          });
+          initializedRef.current = true;
+        }
 
         containerRef.current.innerHTML = '';
         window.google.accounts.id.renderButton(containerRef.current, {

@@ -456,8 +456,6 @@ class ResumeViewSet(viewsets.ModelViewSet):
             )
 
         refresh_result = self._refresh_jobs_for_resume(resume.extracted_text, request)
-        if refresh_result.get('error'):
-            return Response({'error': refresh_result['error']}, status=status.HTTP_400_BAD_REQUEST)
 
         jobs = Job.objects.all()
         if not jobs.exists():
@@ -470,7 +468,10 @@ class ResumeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        return Response({**recommendation_data, 'refresh': refresh_result}, status=status.HTTP_200_OK)
+        response_payload = {**recommendation_data, 'refresh': refresh_result}
+        if refresh_result.get('error'):
+            response_payload['refresh_warning'] = refresh_result['error']
+        return Response(response_payload, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'])
     def skill_match(self, request):
@@ -482,8 +483,6 @@ class ResumeViewSet(viewsets.ModelViewSet):
             )
 
         refresh_result = self._refresh_jobs_for_resume(resume.extracted_text, request)
-        if refresh_result.get('error'):
-            return Response({'detail': refresh_result['error']}, status=status.HTTP_400_BAD_REQUEST)
 
         job_id = request.query_params.get('job_id')
         job = Job.objects.filter(id=job_id).first()
