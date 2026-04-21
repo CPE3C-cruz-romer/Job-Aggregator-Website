@@ -208,6 +208,23 @@ class JobViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
     search_fields = ['title', 'location', 'company', 'description']
 
+    @staticmethod
+    def _pick_param(request, *names, default=''):
+        for name in names:
+            value = request.GET.get(name)
+            if value is None and hasattr(request, 'data'):
+                value = request.data.get(name)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return default
+
+    @staticmethod
+    def _safe_int(value, default):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
     def initial(self, request, *args, **kwargs):
         try:
             ensure_db_ready()
@@ -215,17 +232,19 @@ class JobViewSet(viewsets.ModelViewSet):
             raise APIException(f'Database initialization failed: {str(exc)}') from exc
         return super().initial(request, *args, **kwargs)
 
-    @action(detail=False, methods=['post'], authentication_classes=[], permission_classes=[AllowAny])
+    @action(detail=False, methods=['get', 'post'], authentication_classes=[], permission_classes=[AllowAny])
     def refresh(self, request):
         try:
             ensure_db_ready()
         except Exception as exc:
             return Response({'error': f'Database initialization failed: {str(exc)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        query = request.data.get('query', 'software engineer')
-        location = request.data.get('location', 'united states')
-        results_per_page = int(request.data.get('results_per_page', 50))
-        pages = int(request.data.get('pages', 3))
+        query = self._pick_param(request, 'search', 'query', 'keyword', default='developer')
+        location = self._pick_param(request, 'where', 'location', default='united states')
+        results_per_page = self._safe_int(self._pick_param(request, 'results_per_page', default='50'), 50)
+        page = self._safe_int(self._pick_param(request, 'page', default='1'), 1)
+        pages = self._safe_int(self._pick_param(request, 'pages', default=str(page)), page)
+
         result = fetch_jobs_from_adzuna(
             query=query,
             location=location,
@@ -235,7 +254,14 @@ class JobViewSet(viewsets.ModelViewSet):
 
         if result['error']:
             return Response({'error': result['error']}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(result)
+
+        response_payload = {
+            **result,
+            'query': query,
+            'where': location,
+            'page': max(1, min(pages, 5)),
+        }
+        return Response(response_payload)
 
 
 class EmployerProfileViewSet(viewsets.ReadOnlyModelViewSet):

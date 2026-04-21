@@ -74,15 +74,20 @@ const JobsPage = () => {
   const refreshFromApi = async () => {
     setLoading(true);
     try {
-      const { data } = await api.post('/jobs/refresh/', {
-        query: filters.title || 'software engineer',
-        location: filters.location || 'united states',
-        results_per_page: 50,
-        pages: 3,
+      const searchTerm = filters.title.trim() || 'developer';
+      const location = filters.location.trim() || 'united states';
+      const params = new URLSearchParams({
+        search: searchTerm,
+        where: location,
+        page: '1',
+        pages: '3',
+        results_per_page: '50',
       });
+
+      const { data } = await api.get(`/jobs/refresh/?${params.toString()}`);
       console.log('Refresh API response:', data);
-      await runFilter();
-      setMessage(`Jobs refreshed from Adzuna (created: ${data.created}, updated: ${data.updated}).`);
+      await loadJobs(searchTerm);
+      setMessage(`Jobs refreshed for "${data.query}" in "${data.where}" (created: ${data.created}, updated: ${data.updated}).`);
     } catch (error) {
       console.error('Refresh from API failed:', error?.response?.data || error);
       setMessage(parseApiError(error, 'Failed to fetch jobs. Please try again.'));
