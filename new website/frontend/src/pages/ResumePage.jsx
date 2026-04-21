@@ -12,6 +12,7 @@ const ResumePage = () => {
   const [jobId, setJobId] = useState('');
   const [match, setMatch] = useState(null);
   const [recommendations, setRecommendations] = useState(null);
+  const [autoJobs, setAutoJobs] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [streaming, setStreaming] = useState(false);
@@ -27,9 +28,20 @@ const ResumePage = () => {
     setRecommendations(data);
   };
 
+  const fetchJobsForSelectedSkills = async (selectedSkills) => {
+    if (!selectedSkills || selectedSkills.length === 0) {
+      setAutoJobs([]);
+      return;
+    }
+    const search = encodeURIComponent(selectedSkills.join(' '));
+    const { data } = await api.get(`/jobs/?search=${search}`);
+    setAutoJobs(Array.isArray(data) ? data : []);
+  };
+
   const resetSkillMatchingState = ({ keepInfo = false } = {}) => {
     setMatch(null);
     setRecommendations(null);
+    setAutoJobs([]);
     setError('');
     if (!keepInfo) setInfo('');
   };
@@ -61,6 +73,9 @@ const ResumePage = () => {
       } else {
         await fetchRecommendations();
       }
+
+      const selectedSkills = data?.selected_skills || [];
+      await fetchJobsForSelectedSkills(selectedSkills);
 
       const matchedSkills = data?.recommendations?.extracted_skills || data?.extracted_skills || [];
       window.dispatchEvent(new CustomEvent('jobs:refresh-requested', { detail: { matchedSkills } }));
@@ -236,6 +251,21 @@ const ResumePage = () => {
               ))}
             </div>
           )}
+        </section>
+      )}
+
+      {autoJobs.length > 0 && (
+        <section className="card">
+          <h3>Auto-Matched Jobs from 3 Random Skills</h3>
+          <ul>
+            {autoJobs.slice(0, 10).map((job) => (
+              <li key={job.id}>
+                <button type="button" className="link-btn" onClick={() => navigate(`/jobs/${job.id}`)}>
+                  {job.title} — {job.company}
+                </button>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

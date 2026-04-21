@@ -20,6 +20,19 @@ export const AuthProvider = ({ children }) => {
     setIsEmployer(Boolean(data.is_employer));
   };
 
+  const postWithFallback = async (endpoints, payload) => {
+    let lastError;
+    for (const endpoint of endpoints) {
+      try {
+        return await api.post(endpoint, payload);
+      } catch (error) {
+        lastError = error;
+        if (error?.response?.status !== 404) throw error;
+      }
+    }
+    throw lastError;
+  };
+
   const login = async (username, password) => {
     const { data } = await api.post('/auth/login/', { username, password });
     syncAuth(data);
@@ -27,7 +40,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const loginEmployer = async (username, password) => {
-    const { data } = await api.post('/auth/employer/login/', { username, password });
+    const { data } = await postWithFallback(
+      ['/auth/employer/login/', '/employer/login/'],
+      { username, password },
+    );
     syncAuth(data);
     return data;
   };
@@ -44,7 +60,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const registerEmployer = async (payload) => {
-    const { data } = await api.post('/auth/employer/register/', payload);
+    const { data } = await postWithFallback(
+      ['/auth/employer/register/', '/employer/register/'],
+      payload,
+    );
     syncAuth(data);
   };
 

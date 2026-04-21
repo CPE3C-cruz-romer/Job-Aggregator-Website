@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 let gisScriptPromise = null;
-let initializedClientId = null;
 const credentialListeners = new Set();
 
 const ensureGoogleScriptLoaded = () => {
@@ -66,7 +65,7 @@ const GoogleSignInButton = ({ onCredential, onError }) => {
       await ensureGoogleScriptLoaded();
       if (cancelled || !containerRef.current || !window.google?.accounts?.id) return;
 
-      if (initializedClientId !== clientId) {
+      if (!window.__gsi_initialized_client_id || window.__gsi_initialized_client_id !== clientId) {
         window.google.accounts.id.initialize({
           client_id: clientId,
           callback: (resp) => {
@@ -74,7 +73,7 @@ const GoogleSignInButton = ({ onCredential, onError }) => {
           },
           ux_mode: 'popup',
         });
-        initializedClientId = clientId;
+        window.__gsi_initialized_client_id = clientId;
       }
 
       containerRef.current.innerHTML = '';
@@ -95,7 +94,9 @@ const GoogleSignInButton = ({ onCredential, onError }) => {
       cancelled = true;
       credentialListeners.delete(listener);
     };
-  }, [clientId]);
+  // GIS should initialize once per page lifecycle.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!clientId) return null;
   return <div ref={containerRef} style={{ display: ready ? 'block' : 'none' }} />;
