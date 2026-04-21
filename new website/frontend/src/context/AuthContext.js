@@ -9,6 +9,7 @@ export const AuthProvider = ({ children }) => {
     return raw ? JSON.parse(raw) : null;
   });
   const [isEmployer, setIsEmployer] = useState(() => localStorage.getItem('isEmployer') === '1');
+  const isAuthenticated = Boolean(user) && Boolean(localStorage.getItem('accessToken') || localStorage.getItem('token'));
 
   const syncAuth = (data) => {
     localStorage.setItem('accessToken', data.access);
@@ -54,8 +55,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const value = useMemo(
-    () => ({ user, isEmployer, login, loginEmployer, loginWithGoogle, register, registerEmployer, logout }),
-    [user, isEmployer]
+    () => ({ user, isEmployer, isAuthenticated, login, loginEmployer, loginWithGoogle, register, registerEmployer, logout }),
+    [user, isEmployer, isAuthenticated]
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

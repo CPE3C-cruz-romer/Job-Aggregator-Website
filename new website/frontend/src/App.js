@@ -17,13 +17,13 @@ import JobDetailsPage from './pages/JobDetailsPage';
 import { useAuth } from './context/AuthContext';
 
 const PrivateRoute = ({ children }) => {
-  const { user } = useAuth();
-  return user ? children : <Navigate to="/login" replace />;
+  const { isAuthenticated } = useAuth();
+  return isAuthenticated ? children : <Navigate to="/login" replace />;
 };
 
 const EmployerRoute = ({ children }) => {
-  const { user, isEmployer } = useAuth();
-  if (!user) return <Navigate to="/employer/login" replace />;
+  const { isAuthenticated, isEmployer } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/employer/login" replace />;
   return isEmployer ? children : <Navigate to="/jobs" replace />;
 };
 
