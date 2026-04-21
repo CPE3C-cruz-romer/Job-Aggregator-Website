@@ -1,10 +1,12 @@
 import logging
 import re
+import zipfile
+from xml.etree import ElementTree as ET
 from io import BytesIO
 
 import requests
 from django.conf import settings
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter
 from PyPDF2 import PdfReader
 
 from .models import Job
@@ -185,11 +187,92 @@ def fetch_jobs_from_adzuna(query='software engineer', location='united states', 
 
 
 def extract_text_from_pdf(file_obj):
-    reader = PdfReader(file_obj)
+    raw_bytes = file_obj.read()
+    if hasattr(file_obj, 'seek'):
+        file_obj.seek(0)
+    if not raw_bytes:
+        return ''
+
+    reader = PdfReader(BytesIO(raw_bytes))
     text = []
     for page in reader.pages:
         text.append(page.extract_text() or '')
-    return '\n'.join(text)
+    parsed_text = clean_extracted_text('\n'.join(text))
+    if has_meaningful_resume_text(parsed_text):
+        return parsed_text
+
+    # Fallback for scanned PDFs without embedded text.
+    ocr_text = extract_text_from_scanned_pdf(raw_bytes)
+    return clean_extracted_text(ocr_text or parsed_text)
+
+
+def extract_text_from_docx(file_obj):
+    try:
+        docx_bytes = file_obj.read()
+        if hasattr(file_obj, 'seek'):
+            file_obj.seek(0)
+        archive = zipfile.ZipFile(BytesIO(docx_bytes))
+        xml_data = archive.read('word/document.xml')
+        root = ET.fromstring(xml_data)
+        namespace = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+        text_nodes = root.findall('.//w:t', namespace)
+        extracted = ' '.join((node.text or '').strip() for node in text_nodes if (node.text or '').strip())
+        return clean_extracted_text(extracted)
+    except Exception as exc:
+        logger.info('DOCX extraction failed: %s', exc)
+        return ''
+
+
+def _prepare_ocr_variants(image):
+    base = image.convert('RGB')
+    if base.width > 0 and base.height > 0:
+        base = base.resize((int(base.width * 1.6), int(base.height * 1.6)))
+    grayscale = base.convert('L')
+    contrast = ImageEnhance.Contrast(grayscale).enhance(2.0)
+    denoised = contrast.filter(ImageFilter.MedianFilter(size=3))
+    thresholded = denoised.point(lambda px: 255 if px > 150 else 0)
+    return [base, grayscale, contrast, denoised, thresholded]
+
+
+def _ocr_text_from_image_obj(image):
+    try:
+        import pytesseract  # pylint: disable=import-outside-toplevel
+
+        if settings.TESSERACT_CMD:
+            pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
+
+        chunks = []
+        for variant in _prepare_ocr_variants(image):
+            text = pytesseract.image_to_string(variant, config='--oem 3 --psm 6') or ''
+            if text.strip():
+                chunks.append(text)
+        return clean_extracted_text('\n'.join(chunks)) if chunks else ''
+    except Exception as exc:
+        logger.info('Image OCR unavailable: %s', exc)
+        return ''
+
+
+def extract_text_from_scanned_pdf(pdf_bytes):
+    """
+    OCR fallback path for scanned PDFs. Requires pypdfium2 + pytesseract.
+    """
+    try:
+        import pypdfium2 as pdfium  # pylint: disable=import-outside-toplevel
+    except Exception as exc:
+        logger.info('Scanned PDF OCR unavailable: %s', exc)
+        return ''
+
+    try:
+        document = pdfium.PdfDocument(pdf_bytes)
+        pages_text = []
+        for index in range(len(document)):
+            page = document[index]
+            pil_image = page.render(scale=2.0).to_pil()
+            pages_text.append(_ocr_text_from_image_obj(pil_image))
+        return clean_extracted_text('\n'.join(chunk for chunk in pages_text if chunk))
+    except Exception as exc:
+        logger.info('Scanned PDF OCR failed: %s', exc)
+        return ''
 
 
 def extract_text_from_image(file_obj):
@@ -198,32 +281,13 @@ def extract_text_from_image(file_obj):
     Returns empty text when OCR cannot run.
     """
     try:
-        import pytesseract  # pylint: disable=import-outside-toplevel
-
-        if settings.TESSERACT_CMD:
-            pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
-
-        # Read bytes once so we can retry OCR across multiple processed variants.
         original_bytes = file_obj.read()
         if hasattr(file_obj, 'seek'):
             file_obj.seek(0)
-        image = Image.open(BytesIO(original_bytes)).convert('RGB')
-        large = image.resize((int(image.width * 1.5), int(image.height * 1.5))) if image.width > 0 and image.height > 0 else image
-        grayscale = large.convert('L')
-        high_contrast = grayscale.point(lambda px: 255 if px > 150 else 0)
-
-        variants = [image, grayscale, high_contrast]
-        ocr_chunks = []
-        for variant in variants:
-            text = pytesseract.image_to_string(variant, config='--oem 3 --psm 6') or ''
-            if text.strip():
-                ocr_chunks.append(text)
-
-        if ocr_chunks:
-            return clean_extracted_text('\n'.join(ocr_chunks))
-        return ''
+        image = Image.open(BytesIO(original_bytes))
+        return _ocr_text_from_image_obj(image)
     except Exception as exc:
-        logger.info('Image OCR unavailable: %s', exc)
+        logger.info('Image preprocessing failed: %s', exc)
         return ''
 
 
@@ -244,6 +308,19 @@ def clean_extracted_text(text):
 
     lines = [line.strip() for line in cleaned.split('\n')]
     return '\n'.join([line for line in lines if line])
+
+
+def has_meaningful_resume_text(text, min_chars=80):
+    """
+    Guardrail to prevent skill extraction from OCR noise or image-only uploads.
+    """
+    cleaned = clean_extracted_text(text)
+    if not cleaned:
+        return False
+
+    alnum_count = len(re.findall(r'[A-Za-z0-9]', cleaned))
+    word_count = len(re.findall(r'\b[A-Za-z0-9][A-Za-z0-9+.#/\-]*\b', cleaned))
+    return alnum_count >= min_chars and word_count >= 12
 
 
 def extract_skills_from_text(text):

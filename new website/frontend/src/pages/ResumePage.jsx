@@ -16,8 +16,11 @@ const ResumePage = () => {
   const [loading, setLoading] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [captureBlob, setCaptureBlob] = useState(null);
+  const [faceWelcomeMessage, setFaceWelcomeMessage] = useState('');
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const detectionFrameRef = useRef(null);
+  const faceDetectorRef = useRef(null);
 
   const fetchRecommendations = async () => {
     const { data } = await api.get('/resume/recommendations/');
@@ -112,12 +115,45 @@ const ResumePage = () => {
 
   const startCamera = async () => {
     setError('');
+    setFaceWelcomeMessage('');
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
     videoRef.current.srcObject = stream;
     setStreaming(true);
+
+    if (!('FaceDetector' in window)) return;
+    if (!faceDetectorRef.current) {
+      faceDetectorRef.current = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+    }
+
+    const detectFace = async () => {
+      if (!videoRef.current || videoRef.current.readyState < 2) {
+        detectionFrameRef.current = requestAnimationFrame(detectFace);
+        return;
+      }
+
+      const faces = await faceDetectorRef.current.detect(videoRef.current);
+      if (faces.length > 0) {
+        setMatch(null);
+        setRecommendations(null);
+        setInfo('');
+        setError('');
+        setCaptureBlob(null);
+        setFaceWelcomeMessage('Hello, welcome to our website. Thank you for using it!');
+        stopCamera();
+        return;
+      }
+
+      detectionFrameRef.current = requestAnimationFrame(detectFace);
+    };
+
+    detectionFrameRef.current = requestAnimationFrame(detectFace);
   };
 
   const stopCamera = () => {
+    if (detectionFrameRef.current) {
+      cancelAnimationFrame(detectionFrameRef.current);
+      detectionFrameRef.current = null;
+    }
     const tracks = videoRef.current?.srcObject?.getTracks() || [];
     tracks.forEach((t) => t.stop());
     setStreaming(false);
@@ -134,7 +170,7 @@ const ResumePage = () => {
   return (
     <section className="page">
       <h2>Resume Upload, Skill Match & Recommended Jobs</h2>
-      <p className="muted">Upload resume as PDF or images (.jpg, .jpeg, .png, .webp, .bmp, .tiff) or use camera capture for OCR skill matching.</p>
+      <p className="muted">Upload resume as PDF, DOCX, or images (.jpg, .jpeg, .png, .webp, .bmp, .tiff) or use camera capture for OCR skill matching.</p>
 
       <div className="card">
         <input
@@ -143,7 +179,7 @@ const ResumePage = () => {
           onChange={(e) => setNickname(e.target.value)}
           placeholder="Optional nickname (used to personalize skill matching)"
         />
-        <input type="file" accept=".pdf,image/*,.jpeg,.jpg,.png,.webp,.bmp,.tif,.tiff" onChange={(e) => setFile(e.target.files[0])} />
+        <input type="file" accept=".pdf,.docx,image/*,.jpeg,.jpg,.png,.webp,.bmp,.tif,.tiff" onChange={(e) => setFile(e.target.files[0])} />
         <div className="actions">
           <button className="btn" onClick={upload} disabled={loading}>{loading ? 'Processing...' : 'Upload Resume'}</button>
         </div>
@@ -159,6 +195,7 @@ const ResumePage = () => {
         <video ref={videoRef} autoPlay className="camera" />
         <canvas ref={canvasRef} className="camera hidden" />
         {captureBlob && <p className="status">Captured image is ready. Click Upload Resume.</p>}
+        {faceWelcomeMessage && <p className="status">{faceWelcomeMessage}</p>}
       </div>
 
       {info && <p className="status">{info}</p>}

@@ -26,8 +26,10 @@ from .serializers import (
 from .services import (
     fetch_jobs_from_adzuna,
     clean_extracted_text,
+    extract_text_from_docx,
     extract_text_from_pdf,
     extract_text_from_image,
+    has_meaningful_resume_text,
     match_resume_skills,
     recommend_jobs_for_skills,
 )
@@ -341,8 +343,8 @@ class ResumeViewSet(viewsets.ModelViewSet):
         uploaded_image = request.FILES.get('image')
         if not uploaded_file and not uploaded_image:
             return Response({'error': 'Upload a PDF or resume image first.'}, status=status.HTTP_400_BAD_REQUEST)
-        if uploaded_file and not uploaded_file.name.lower().endswith('.pdf'):
-            return Response({'error': 'Resume file must be a PDF.'}, status=status.HTTP_400_BAD_REQUEST)
+        if uploaded_file and not uploaded_file.name.lower().endswith(('.pdf', '.docx')):
+            return Response({'error': 'Resume file must be a PDF or DOCX.'}, status=status.HTTP_400_BAD_REQUEST)
         if uploaded_image:
             allowed_ext = ('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tif', '.tiff')
             if not uploaded_image.name.lower().endswith(allowed_ext):
@@ -363,43 +365,50 @@ class ResumeViewSet(viewsets.ModelViewSet):
             resume.file.delete(save=False)
             resume.file = None
 
-        previous_text = resume.extracted_text or ''
         extracted_text = ''
         nickname = (request.data.get('nickname') or '').strip()
-        if uploaded_file and resume.file and resume.file.name.lower().endswith('.pdf'):
-            with resume.file.open('rb') as pdf_file:
-                extracted_text = clean_extracted_text(extract_text_from_pdf(pdf_file))
+        if uploaded_file and resume.file:
+            low_name = resume.file.name.lower()
+            with resume.file.open('rb') as resume_file:
+                if low_name.endswith('.pdf'):
+                    extracted_text = clean_extracted_text(extract_text_from_pdf(resume_file))
+                elif low_name.endswith('.docx'):
+                    extracted_text = clean_extracted_text(extract_text_from_docx(resume_file))
         elif uploaded_image and resume.image:
             with resume.image.open('rb') as image_file:
+                if image_contains_face(image_file):
+                    resume.extracted_text = ''
+                    resume.save(update_fields=['image', 'file', 'extracted_text'])
+                    return Response(
+                        {'error': 'Invalid resume file. Please upload a document with text content.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 extracted_text = extract_text_from_image(image_file)
 
         if nickname:
             extracted_text = f"{extracted_text}\nnickname: {nickname}".strip()
 
-        # If OCR is unavailable for an image upload, keep prior parsed text so skill matching still works.
-        if uploaded_image and not extracted_text and previous_text:
-            resume.extracted_text = previous_text
-        else:
-            resume.extracted_text = extracted_text
-        resume.save(update_fields=['image', 'file', 'extracted_text'])
-
-        response_data = self.get_serializer(resume).data
-        if uploaded_image and not extracted_text:
-            response_data['ocr_warning'] = (
-                'Image uploaded, but OCR is not configured on the server yet. '
-                'Install pytesseract + system tesseract for camera/image skill matching.'
+        if not has_meaningful_resume_text(extracted_text):
+            resume.extracted_text = ''
+            resume.save(update_fields=['image', 'file', 'extracted_text'])
+            return Response(
+                {'error': 'Unable to extract text from the uploaded resume. Please upload a clearer or text-based document.'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        resume.extracted_text = extracted_text
+        resume.save(update_fields=['image', 'file', 'extracted_text'])
+
+        return Response(self.get_serializer(resume).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['get'])
     def recommendations(self, request):
         resume = Resume.objects.filter(user=request.user).first()
         if not resume:
             return Response({'error': 'No resume found. Upload a resume first.'}, status=status.HTTP_400_BAD_REQUEST)
-        if not resume.extracted_text:
+        if not has_meaningful_resume_text(resume.extracted_text):
             return Response(
-                {'error': 'Resume text could not be extracted. Upload a readable PDF to continue.'},
+                {'error': 'Unable to extract text from the uploaded resume. Please upload a clearer or text-based document.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -419,8 +428,11 @@ class ResumeViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def skill_match(self, request):
         resume = Resume.objects.filter(user=request.user).first()
-        if not resume or not resume.extracted_text:
-            return Response({'detail': 'No parsed PDF resume found yet.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not resume or not has_meaningful_resume_text(resume.extracted_text):
+            return Response(
+                {'detail': 'Unable to extract text from the uploaded resume. Please upload a clearer or text-based document.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         job_id = request.query_params.get('job_id')
         job = Job.objects.filter(id=job_id).first()

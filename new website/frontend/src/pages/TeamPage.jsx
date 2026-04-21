@@ -6,6 +6,7 @@ const members = [
   { name: 'Allane Allan Paul Valenzuela', role: 'Frontend Specialist', image: '/team/allan-allan-paul-valenzuela.jpeg' },
   { name: 'Hugh Ariff Aserit', role: 'Backend Developer', image: '/team/hugh-ariff-aserit.jpeg' },
 ];
+
 const TeamPage = () => (
   <section className="page">
     <div className="hero compact">
