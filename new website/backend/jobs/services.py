@@ -6,7 +6,7 @@ from io import BytesIO
 
 import requests
 from django.conf import settings
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 from PyPDF2 import PdfReader
 
 from .models import Job
@@ -243,7 +243,7 @@ def _ocr_text_from_image_obj(image):
 
         chunks = []
         for variant in _prepare_ocr_variants(image):
-            text = pytesseract.image_to_string(variant, config='--oem 3 --psm 6') or ''
+            text = pytesseract.image_to_string(variant, config='--oem 3 --psm 4 -l eng') or ''
             if text.strip():
                 chunks.append(text)
         return clean_extracted_text('\n'.join(chunks)) if chunks else ''
@@ -285,6 +285,9 @@ def extract_text_from_image(file_obj):
         if hasattr(file_obj, 'seek'):
             file_obj.seek(0)
         image = Image.open(BytesIO(original_bytes))
+        image = ImageOps.exif_transpose(image)
+        if image.mode not in ('RGB', 'L'):
+            image = image.convert('RGB')
         return _ocr_text_from_image_obj(image)
     except Exception as exc:
         logger.info('Image preprocessing failed: %s', exc)

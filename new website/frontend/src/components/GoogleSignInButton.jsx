@@ -1,9 +1,45 @@
 import React, { useEffect, useRef, useState } from 'react';
 
+let gisScriptPromise = null;
+let initializedClientId = null;
+const credentialListeners = new Set();
+
+const ensureGoogleScriptLoaded = () => {
+  if (window.google?.accounts?.id) return Promise.resolve();
+  if (gisScriptPromise) return gisScriptPromise;
+
+  gisScriptPromise = new Promise((resolve, reject) => {
+    const existingScript = document.querySelector('script[data-gsi="true"]');
+    if (existingScript) {
+      existingScript.addEventListener('load', () => resolve(), { once: true });
+      existingScript.addEventListener('error', () => reject(new Error('Google SDK failed to load.')), { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.dataset.gsi = 'true';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Google SDK failed to load.'));
+    document.head.appendChild(script);
+  });
+
+  return gisScriptPromise;
+};
+
 const GoogleSignInButton = ({ onCredential, onError }) => {
   const containerRef = useRef(null);
+  const credentialRef = useRef(onCredential);
+  const errorRef = useRef(onError);
   const [ready, setReady] = useState(false);
   const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+
+  useEffect(() => {
+    credentialRef.current = onCredential;
+    errorRef.current = onError;
+  }, [onCredential, onError]);
 
   useEffect(() => {
     setReady(false);
@@ -23,53 +59,43 @@ const GoogleSignInButton = ({ onCredential, onError }) => {
     }
 
     let cancelled = false;
-    let attempts = 0;
-    const maxAttempts = 25;
+    const listener = (credential) => credentialRef.current?.(credential);
+    credentialListeners.add(listener);
 
-    const mountGoogleButton = () => {
-      if (cancelled || !containerRef.current) return true;
-      if (!window.google?.accounts?.id) return false;
+    const mountGoogleButton = async () => {
+      await ensureGoogleScriptLoaded();
+      if (cancelled || !containerRef.current || !window.google?.accounts?.id) return;
 
-      try {
+      if (initializedClientId !== clientId) {
         window.google.accounts.id.initialize({
           client_id: clientId,
-          callback: (resp) => onCredential?.(resp.credential),
+          callback: (resp) => {
+            credentialListeners.forEach((cb) => cb(resp.credential));
+          },
           ux_mode: 'popup',
         });
-
-        containerRef.current.innerHTML = '';
-        window.google.accounts.id.renderButton(containerRef.current, {
-          theme: 'outline',
-          size: 'large',
-          width: 320,
-          text: 'continue_with',
-        });
-        setReady(true);
-        return true;
-      } catch (err) {
-        onError?.('Google auth initialization failed. Verify authorized origins in Google Cloud Console.');
-        return true;
+        initializedClientId = clientId;
       }
+
+      containerRef.current.innerHTML = '';
+      window.google.accounts.id.renderButton(containerRef.current, {
+        theme: 'outline',
+        size: 'large',
+        width: 320,
+        text: 'continue_with',
+      });
+      setReady(true);
     };
 
-    if (mountGoogleButton()) return () => {};
-
-    const interval = window.setInterval(() => {
-      attempts += 1;
-      const mounted = mountGoogleButton();
-      if (mounted || attempts >= maxAttempts) {
-        if (!mounted) {
-          onError?.('Google SDK failed to load. You can still login with username/password.');
-        }
-        window.clearInterval(interval);
-      }
-    }, 200);
+    mountGoogleButton().catch(() => {
+      errorRef.current?.('Google SDK failed to load. You can still login with username/password.');
+    });
 
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      credentialListeners.delete(listener);
     };
-  }, [clientId, onCredential, onError]);
+  }, [clientId]);
 
   if (!clientId) return null;
   return <div ref={containerRef} style={{ display: ready ? 'block' : 'none' }} />;

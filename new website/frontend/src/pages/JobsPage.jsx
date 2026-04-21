@@ -29,6 +29,20 @@ const JobsPage = () => {
 
   useEffect(() => { loadJobs(); }, []);
 
+  useEffect(() => {
+    const onResumeRefresh = (event) => {
+      const matchedSkills = event?.detail?.matchedSkills || [];
+      const query = matchedSkills.slice(0, 4).join(' ');
+      loadJobs(query);
+      if (matchedSkills.length > 0) {
+        setMessage(`Jobs refreshed using resume skills: ${matchedSkills.slice(0, 6).join(', ')}`);
+      }
+    };
+
+    window.addEventListener('jobs:refresh-requested', onResumeRefresh);
+    return () => window.removeEventListener('jobs:refresh-requested', onResumeRefresh);
+  }, []);
+
   const saveJob = async (jobId) => {
     const token = localStorage.getItem('accessToken');
     if (!token) {

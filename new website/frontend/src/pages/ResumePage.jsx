@@ -56,13 +56,14 @@ const ResumePage = () => {
       const { data } = await api.post('/resume/', form);
       setInfo(`Resume uploaded at ${new Date(data.uploaded_at).toLocaleString()}`);
       if (data.ocr_warning) setInfo((prev) => `${prev} • ${data.ocr_warning}`);
-
-      try {
+      if (data.recommendations) {
+        setRecommendations(data.recommendations);
+      } else {
         await fetchRecommendations();
-      } catch (recommendationError) {
-        setRecommendations(null);
-        setError(parseApiError(recommendationError, 'Resume uploaded, but recommendations failed to load.'));
       }
+
+      const matchedSkills = data?.recommendations?.extracted_skills || data?.extracted_skills || [];
+      window.dispatchEvent(new CustomEvent('jobs:refresh-requested', { detail: { matchedSkills } }));
     } catch (err) {
       setError(parseApiError(err, 'Failed to upload resume.'));
       setRecommendations(null);

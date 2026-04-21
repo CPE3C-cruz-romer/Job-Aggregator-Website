@@ -17,12 +17,11 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        user = User(
+        user = User.objects.create_user(
             username=validated_data['username'],
-            email=validated_data.get('email', ''),
+            email=validated_data.get('email', '') or '',
+            password=validated_data['password'],
         )
-        user.set_password(validated_data['password'])
-        user.save()
         return user
 
 

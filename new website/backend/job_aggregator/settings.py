@@ -47,6 +47,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'job_aggregator.middleware.SecurityHeadersMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'job_aggregator.middleware.ApiJsonErrorMiddleware',
@@ -143,3 +144,10 @@ ADZUNA_APP_KEY = os.getenv('ADZUNA_APP_KEY', '')
 ADZUNA_COUNTRY = os.getenv('ADZUNA_COUNTRY', 'us')
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
 TESSERACT_CMD = os.getenv('TESSERACT_CMD', '')
+
+# Google OAuth popup compatibility:
+# - "same-origin-allow-popups" avoids breaking window.postMessage for popup flows.
+# - Keep COEP as unsafe-none unless your app is fully cross-origin isolated.
+CROSS_ORIGIN_OPENER_POLICY = os.getenv('CROSS_ORIGIN_OPENER_POLICY', 'same-origin-allow-popups')
+CROSS_ORIGIN_EMBEDDER_POLICY = os.getenv('CROSS_ORIGIN_EMBEDDER_POLICY', 'unsafe-none')
+CROSS_ORIGIN_RESOURCE_POLICY = os.getenv('CROSS_ORIGIN_RESOURCE_POLICY', 'same-site')
