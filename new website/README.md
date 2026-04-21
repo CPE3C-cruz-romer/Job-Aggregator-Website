@@ -84,6 +84,7 @@ In Google Cloud Console, add these **Authorized JavaScript origins**:
 
 Also ensure `REACT_APP_GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_ID` match.
 Use the Google OAuth **Client ID** only (`...apps.googleusercontent.com`), not `GOCSPX-...` client secrets.
+If deployed on Vercel, set `REACT_APP_GOOGLE_CLIENT_ID` in Vercel Environment Variables and redeploy.
 
 ### 2) "Could not refresh jobs" from Adzuna
 Set these in `backend/.env`:
