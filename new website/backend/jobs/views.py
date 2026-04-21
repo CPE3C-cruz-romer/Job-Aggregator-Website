@@ -32,6 +32,7 @@ from .services import (
     has_meaningful_resume_text,
     match_resume_skills,
     recommend_jobs_for_skills,
+    extract_skills_from_text,
 )
 from .db_ready import ensure_db_ready
 
@@ -359,6 +360,22 @@ class ResumeViewSet(viewsets.ModelViewSet):
     serializer_class = ResumeSerializer
     permission_classes = [IsAuthenticated]
 
+
+    def _refresh_jobs_for_resume(self, resume_text, request):
+        extracted_skills = extract_skills_from_text(resume_text)
+        location = (request.query_params.get('where') or request.query_params.get('location') or 'united states').strip()
+        search_query = (request.query_params.get('search') or request.query_params.get('query') or '').strip()
+        if not search_query:
+            signal_skills = [skill for skill in extracted_skills if len(skill.split()) <= 3]
+            search_query = ' '.join(signal_skills[:3]) or 'developer'
+
+        return fetch_jobs_from_adzuna(
+            query=search_query,
+            location=location or 'united states',
+            results_per_page=30,
+            pages=2,
+        )
+
     def get_queryset(self):
         return Resume.objects.filter(user=self.request.user)
 
@@ -438,6 +455,10 @@ class ResumeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        refresh_result = self._refresh_jobs_for_resume(resume.extracted_text, request)
+        if refresh_result.get('error'):
+            return Response({'error': refresh_result['error']}, status=status.HTTP_400_BAD_REQUEST)
+
         jobs = Job.objects.all()
         if not jobs.exists():
             return Response({'error': 'No jobs available for matching yet.'}, status=status.HTTP_404_NOT_FOUND)
@@ -449,7 +470,7 @@ class ResumeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        return Response(recommendation_data, status=status.HTTP_200_OK)
+        return Response({**recommendation_data, 'refresh': refresh_result}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'])
     def skill_match(self, request):
@@ -460,10 +481,14 @@ class ResumeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        refresh_result = self._refresh_jobs_for_resume(resume.extracted_text, request)
+        if refresh_result.get('error'):
+            return Response({'detail': refresh_result['error']}, status=status.HTTP_400_BAD_REQUEST)
+
         job_id = request.query_params.get('job_id')
         job = Job.objects.filter(id=job_id).first()
         if not job:
             return Response({'detail': 'Job not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         result = match_resume_skills(resume.extracted_text, job.description)
-        return Response({'job_id': job.id, **result})
+        return Response({'job_id': job.id, 'refresh': refresh_result, **result})
