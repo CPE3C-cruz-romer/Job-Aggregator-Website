@@ -10,6 +10,17 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-secret-key-change-me')
 DEBUG = os.getenv('DEBUG', '1') == '1'
 
 
+def _env_csv(name: str, default: str) -> list[str]:
+    value = os.getenv(name, default)
+    return [item.strip() for item in value.split(',') if item.strip()]
+
+
+ALLOWED_HOSTS = _env_csv(
+    'ALLOWED_HOSTS',
+    '127.0.0.1,localhost,job-aggregator-website.onrender.com',
+)
+
+
 def _split_csv(value):
     return [item.strip() for item in value.split(',') if item.strip()]
 
@@ -100,15 +111,10 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CORS_ALLOWED_ORIGINS = _split_csv(
-    os.getenv(
-        'CORS_ALLOWED_ORIGINS',
-        'http://localhost:3000,http://127.0.0.1:3000'
-    )
+CORS_ALLOWED_ORIGINS = _env_csv(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:3000,http://127.0.0.1:3000,https://www.cpe3cjobaggregator.com,https://cpe3cjobaggregator.com',
 )
-CORS_ALLOWED_ORIGIN_REGEXES = [
-    r'^https://.*\.vercel\.app$',
-]
 
 REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': (
