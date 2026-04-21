@@ -56,6 +56,14 @@ cp .env.example .env
 npm start
 ```
 
+For production frontend deployments (for example Vercel), set:
+
+```env
+REACT_APP_API_URL=https://job-aggregator-website.onrender.com/api
+```
+
+If you migrate to Vite later, use `VITE_API_URL` instead.
+
 ## Team images
 
 Put your real JPEGs in `frontend/public/team/` using these names:
@@ -110,3 +118,14 @@ In Google Cloud Console -> Credentials -> OAuth Client:
   - `backend/.env` -> `GOOGLE_CLIENT_ID`
 
 Username/password registration/login will work even when Google is misconfigured.
+
+### 5) Frontend deployed but API calls fail
+If your React frontend is on Vercel and backend is on Render:
+
+1. In Vercel project settings, set:
+   - `REACT_APP_API_URL=https://job-aggregator-website.onrender.com/api`
+2. In Render backend environment, set:
+   - `ALLOWED_HOSTS=job-aggregator-website.onrender.com,...`
+   - `CORS_ALLOWED_ORIGINS=https://your-frontend.vercel.app,...`
+
+If you use Vercel preview deployments, allow `https://*.vercel.app` with Django `CORS_ALLOWED_ORIGIN_REGEXES`.

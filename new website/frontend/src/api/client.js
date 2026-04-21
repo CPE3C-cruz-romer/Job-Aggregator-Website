@@ -1,7 +1,16 @@
 import axios from 'axios';
 
+const DEFAULT_API_URL = 'https://job-aggregator-website.onrender.com/api';
+
+const rawBaseUrl =
+  process.env.REACT_APP_API_URL ||
+  process.env.REACT_APP_API_BASE_URL ||
+  DEFAULT_API_URL;
+
+const normalizedBaseUrl = rawBaseUrl.replace(/\/+$/, '');
+
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api',
+  baseURL: normalizedBaseUrl,
 });
 
 api.interceptors.request.use((config) => {
