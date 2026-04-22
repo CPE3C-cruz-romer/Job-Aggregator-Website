@@ -13,6 +13,7 @@ const UserProfilePage = () => {
     try {
       const { data } = await api.get('/user/profile/');
       setProfile(data);
+      localStorage.setItem('userProfile', JSON.stringify(data));
     } catch (err) {
       setMessage(parseApiError(err, 'Failed to load profile.'));
     }

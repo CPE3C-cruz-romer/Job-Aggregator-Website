@@ -8,10 +8,11 @@ from .models import EmployerProfile, Job, SavedJob, Application, Resume, UserPro
 class UserRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     full_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    jobPreferences = serializers.ListField(child=serializers.CharField(max_length=120), write_only=True, required=False)
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'password', 'full_name')
+        fields = ('id', 'username', 'email', 'password', 'full_name', 'jobPreferences')
 
     def validate_password(self, value):
         validate_password(value)
@@ -19,6 +20,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         full_name = (validated_data.pop('full_name', '') or '').strip()
+        job_preferences = validated_data.pop('jobPreferences', [])
         user = User(
             username=validated_data['username'],
             email=validated_data.get('email', ''),
@@ -27,7 +29,11 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             user.first_name = full_name[:150]
         user.set_password(validated_data['password'])
         user.save()
-        UserProfile.objects.create(user=user, full_name=full_name or user.first_name)
+        UserProfile.objects.create(
+            user=user,
+            full_name=full_name or user.first_name,
+            job_interests=[item.strip().lower() for item in job_preferences if str(item).strip()],
+        )
         return user
 
 

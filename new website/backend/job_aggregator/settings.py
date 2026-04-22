@@ -126,6 +126,7 @@ CORS_ALLOWED_ORIGINS = _env_csv(
     'CORS_ALLOWED_ORIGINS',
     'http://localhost:3000,http://127.0.0.1:3000,https://www.cpe3cjobaggregator.com,https://cpe3cjobaggregator.com',
 )
+CORS_ALLOW_CREDENTIALS = True
 
 REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': (

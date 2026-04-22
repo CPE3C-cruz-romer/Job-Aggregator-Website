@@ -1,4 +1,5 @@
 import re
+from functools import reduce
 
 from django.conf import settings
 from django.contrib.auth import authenticate
@@ -221,20 +222,24 @@ class JobViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = Job.objects.select_related('posted_by_employer').all()
-        query = (self.request.query_params.get('search') or '').strip()
+        query = (self.request.query_params.get('search') or self.request.query_params.get('query') or '').strip()
         title = (self.request.query_params.get('title') or '').strip()
         location = (self.request.query_params.get('location') or '').strip()
         company = (self.request.query_params.get('company') or '').strip()
         category = (self.request.query_params.get('category') or '').strip()
         skills_param = (self.request.query_params.get('skills') or '').strip()
+        query_words = self.request.query_params.getlist('query')
+        if query and not query_words:
+            query_words = re.split(r'[\s,]+', query)
+        normalized_words = [word.strip().lower() for word in query_words if str(word).strip()]
 
-        if query:
-            queryset = queryset.filter(
-                Q(title__icontains=query)
-                | Q(company__icontains=query)
-                | Q(location__icontains=query)
-                | Q(description__icontains=query)
+        if normalized_words:
+            keyword_q = reduce(
+                lambda acc, word: acc | Q(title__icontains=word) | Q(category__icontains=word),
+                normalized_words,
+                Q(),
             )
+            queryset = queryset.filter(keyword_q)
         if title:
             queryset = queryset.filter(title__icontains=title)
         if location:
@@ -250,6 +255,74 @@ class JobViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(required_skills__icontains=skill)
 
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        limit = min(50, max(1, self._safe_int(request.query_params.get('limit'), 10)))
+        skip = max(0, self._safe_int(request.query_params.get('skip'), 0))
+        reserve_size = limit * 3
+        cache_key = f"jobs:list:{request.get_full_path()}:limit={limit}:skip={skip}"
+        cached_ids = cache.get(cache_key)
+        if cached_ids is None:
+            reserve_ids = list(queryset.values_list('id', flat=True)[skip: skip + reserve_size])
+            cache.set(cache_key, reserve_ids, 180)
+            cached_ids = reserve_ids
+        page_ids = cached_ids[:limit]
+        jobs = list(Job.objects.filter(id__in=page_ids).select_related('posted_by_employer'))
+        jobs_map = {job.id: job for job in jobs}
+        ordered_jobs = [jobs_map[job_id] for job_id in page_ids if job_id in jobs_map]
+        serializer = self.get_serializer(ordered_jobs, many=True)
+        response = Response(serializer.data, status=status.HTTP_200_OK)
+        response['X-Has-More'] = '1' if len(cached_ids) > limit else '0'
+        response['X-Next-Skip'] = str(skip + limit)
+        return response
+
+    @staticmethod
+    def _normalize_terms(items):
+        return [str(item).strip().lower() for item in items if str(item).strip()]
+
+    @classmethod
+    def _expand_interest_terms(cls, interests):
+        mapping = {
+            'it': ['software', 'developer', 'engineering', 'technology', 'devops', 'data'],
+            'construction': ['construction', 'civil', 'site', 'foreman', 'electrician', 'plumber'],
+            'accountant': ['accountant', 'accounting', 'finance', 'bookkeeper', 'auditor'],
+            'healthcare': ['nurse', 'medical', 'health', 'clinic', 'hospital'],
+            'marketing': ['marketing', 'seo', 'brand', 'content', 'digital marketing'],
+            'sales': ['sales', 'account executive', 'business development'],
+        }
+        expanded = set(cls._normalize_terms(interests))
+        for item in list(expanded):
+            expanded.update(mapping.get(item, []))
+        return expanded
+
+    @classmethod
+    def _rank_jobs(cls, jobs, interests, skills):
+        interest_terms = cls._expand_interest_terms(interests)
+        skill_terms = set(cls._normalize_terms(skills))
+        ranked_jobs = []
+        for job in jobs:
+            required = {str(item).strip().lower() for item in (job.required_skills or []) if str(item).strip()}
+            title_tokens = f"{job.title or ''} {job.category or ''}".lower()
+            preference_match = 1 if any(term in title_tokens for term in interest_terms) else 0
+            skill_matches = len(required.intersection(skill_terms))
+            score = (skill_matches * 20) + (preference_match * 10)
+            if job.is_direct_employer:
+                score += 10_000
+            job.match_score = score
+            job.matching_skills_count = skill_matches
+            ranked_jobs.append(job)
+
+        ranked_jobs.sort(
+            key=lambda item: (
+                1 if item.is_direct_employer else 0,
+                item.matching_skills_count,
+                1 if any(term in f"{item.title or ''} {item.category or ''}".lower() for term in interest_terms) else 0,
+                item.created_at.timestamp(),
+            ),
+            reverse=True,
+        )
+        return ranked_jobs
 
     @staticmethod
     def _normalize_terms(items):
@@ -563,6 +636,9 @@ class UserProfileViewSet(viewsets.ModelViewSet):
     @staticmethod
     def _normalized_profile_payload(request):
         payload = request.data.copy()
+        picture = payload.get('profilePicture')
+        if picture and not payload.get('profile_picture'):
+            payload['profile_picture'] = picture
         if hasattr(payload, 'getlist'):
             for field in ('skills', 'job_interests'):
                 values = [item.strip() for item in payload.getlist(field) if str(item).strip()]

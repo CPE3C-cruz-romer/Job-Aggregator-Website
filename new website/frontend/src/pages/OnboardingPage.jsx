@@ -25,7 +25,8 @@ const OnboardingPage = () => {
         jobPreferences,
         skills,
       };
-      await api.post('/user/profile/onboarding/', payload);
+      const { data } = await api.post('/user/profile/onboarding/', payload);
+      localStorage.setItem('userProfile', JSON.stringify(data));
       localStorage.setItem('onboardingCompleted', '1');
       setOnboardingCompleted(true);
       navigate('/jobs');

@@ -12,16 +12,25 @@ const JobsPage = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [filters, setFilters] = useState({ title: '', location: '', company: '' });
+  const [skip, setSkip] = useState(0);
+  const [hasMoreJobs, setHasMoreJobs] = useState(false);
   const [recommended, setRecommended] = useState([]);
   const [recommendedPage, setRecommendedPage] = useState(1);
   const [recommendedHasMore, setRecommendedHasMore] = useState(false);
 
-  const loadJobs = async (searchQuery = '') => {
+  const loadJobs = async ({ searchQuery = '', nextSkip = 0, append = false } = {}) => {
     setLoading(true);
     try {
-      const { data } = await api.get(`/jobs/${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ''}`);
+      const params = new URLSearchParams({
+        limit: '10',
+        skip: String(nextSkip),
+      });
+      if (searchQuery) params.set('query', searchQuery);
+      const { data, headers } = await api.get(`/jobs/?${params.toString()}`);
       console.log('Jobs loaded:', data);
-      setJobs(data);
+      setJobs((prev) => (append ? [...prev, ...data] : data));
+      setHasMoreJobs(headers['x-has-more'] === '1');
+      setSkip(Number(headers['x-next-skip'] || nextSkip + 10));
     } catch (error) {
       console.error('Job list fetch failed:', error);
       setMessage(parseApiError(error, 'Failed to fetch jobs. Please try again.'));
@@ -30,7 +39,20 @@ const JobsPage = () => {
     }
   };
 
-  useEffect(() => { loadJobs(); }, []);
+  useEffect(() => {
+    const profileRaw = localStorage.getItem('userProfile');
+    if (!profileRaw) {
+      loadJobs();
+      return;
+    }
+    try {
+      const profile = JSON.parse(profileRaw);
+      const derivedQuery = (profile.job_interests || []).join(' ');
+      loadJobs({ searchQuery: derivedQuery });
+    } catch {
+      loadJobs();
+    }
+  }, []);
   useEffect(() => {
     const loadMatches = async () => {
       const token = localStorage.getItem('accessToken');
@@ -82,7 +104,7 @@ const JobsPage = () => {
 
   const runFilter = async () => {
     const query = [filters.title, filters.location, filters.company].filter(Boolean).join(' ');
-    await loadJobs(query);
+    await loadJobs({ searchQuery: query, nextSkip: 0, append: false });
   };
 
   const applyJob = async (job) => {
@@ -116,7 +138,7 @@ const JobsPage = () => {
 
       const { data } = await api.get(`/jobs/refresh/?${params.toString()}`);
       console.log('Refresh API response:', data);
-      await loadJobs(searchTerm);
+      await loadJobs({ searchQuery: searchTerm, nextSkip: 0, append: false });
       setMessage(`Jobs refreshed for "${data.query}" in "${data.where}" (created: ${data.created}, updated: ${data.updated}).`);
     } catch (error) {
       console.error('Refresh from API failed:', error?.response?.data || error);
@@ -152,9 +174,16 @@ const JobsPage = () => {
         </section>
       )}
       {loading ? <p>Loading jobs...</p> : (
-        <div className="grid">
-          {jobs.map((job) => <JobCard key={job.id} job={job} onSave={saveJob} onApply={applyJob} />)}
-        </div>
+        <>
+          <div className="grid">
+            {jobs.map((job) => <JobCard key={job.id} job={job} onSave={saveJob} onApply={applyJob} />)}
+          </div>
+          {hasMoreJobs && (
+            <button type="button" className="btn-alt" onClick={() => loadJobs({ nextSkip: skip, append: true })}>
+              Load More Jobs
+            </button>
+          )}
+        </>
       )}
     </section>
   );

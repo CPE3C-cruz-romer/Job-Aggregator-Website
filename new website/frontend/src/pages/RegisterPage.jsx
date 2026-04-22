@@ -7,9 +7,11 @@ import { parseApiError } from '../utils/error';
 const RegisterPage = () => {
   const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ username: '', email: '', password: '', full_name: '' });
+  const [form, setForm] = useState({ username: '', email: '', password: '', full_name: '', jobPreferences: [] });
+  const [step, setStep] = useState(1);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const preferenceOptions = ['construction', 'accountant', 'engineering', 'it', 'healthcare', 'marketing'];
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -42,13 +44,46 @@ const RegisterPage = () => {
     <section className="auth-wrap">
       <form className="auth-card" onSubmit={onSubmit}>
         <h2>Create Account</h2>
-        <p className="muted">Use 8+ characters and avoid common or numeric-only passwords.</p>
-        <input placeholder="Username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
-        <input placeholder="Full name" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
-        <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-        <input placeholder="Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-        {error && <p className="error" role="alert">Please fix: {error}</p>}
-        <button className="btn" type="submit" disabled={loading}>{loading ? 'Creating account...' : 'Register'}</button>
+        <p className="muted">Use 8+ characters and avoid common or numeric-only passwords. Step {step} of 2.</p>
+        {step === 1 ? (
+          <>
+            <input placeholder="Username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+            <input placeholder="Full name" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
+            <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <input placeholder="Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            <button type="button" className="btn" onClick={() => setStep(2)} disabled={!form.username || !form.email || !form.password}>
+              Continue
+            </button>
+          </>
+        ) : (
+          <>
+            <label>Select work preferences</label>
+            <div className="actions">
+              {preferenceOptions.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className={form.jobPreferences.includes(option) ? 'btn' : 'btn-alt'}
+                  onClick={() => setForm((prev) => ({
+                    ...prev,
+                    jobPreferences: prev.jobPreferences.includes(option)
+                      ? prev.jobPreferences.filter((item) => item !== option)
+                      : [...prev.jobPreferences, option],
+                  }))}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+            {error && <p className="error" role="alert">Please fix: {error}</p>}
+            <div className="actions">
+              <button type="button" className="btn-alt" onClick={() => setStep(1)}>Back</button>
+              <button className="btn" type="submit" disabled={loading}>
+                {loading ? 'Creating account...' : 'Register'}
+              </button>
+            </div>
+          </>
+        )}
         <div className="google-wrap">
           <GoogleSignInButton onCredential={onGoogleCredential} onError={(msg) => setError(msg)} />
         </div>
