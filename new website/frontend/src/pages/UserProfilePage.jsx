@@ -47,12 +47,11 @@ const UserProfilePage = () => {
 
   return (
     <section className="page">
-      <form className="card" onSubmit={saveProfile}>
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+      <form className="card profile-card" onSubmit={saveProfile}>
+        <div className="profile-avatar-wrap">
           <button
             type="button"
-            className="btn-alt"
-            style={{ width: 128, height: 128, borderRadius: '50%', padding: 0, overflow: 'hidden' }}
+            className="btn-alt profile-avatar-btn"
             onClick={() => document.getElementById(`profile-upload-${uploadNonce}`)?.click()}
             aria-label="Upload profile picture"
           >
@@ -60,10 +59,10 @@ const UserProfilePage = () => {
               <img
                 src={previewUrl || profile.profile_picture_url}
                 alt="Profile preview"
-                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                className="profile-avatar-img"
               />
             ) : (
-              <span>Upload</span>
+              <span>Upload Photo</span>
             )}
           </button>
         </div>

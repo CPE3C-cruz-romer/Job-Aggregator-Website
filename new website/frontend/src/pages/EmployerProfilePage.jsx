@@ -33,7 +33,7 @@ const EmployerProfilePage = () => {
   return (
     <section className="page">
       <div className="hero compact"><h1>Employer Profile</h1></div>
-      <form className="card" onSubmit={save}>
+      <form className="card profile-card" onSubmit={save}>
         <input value={profile.company_name || ''} placeholder="Company name" onChange={(e) => setProfile({ ...profile, company_name: e.target.value })} />
         <textarea value={profile.about || ''} placeholder="Company description" onChange={(e) => setProfile({ ...profile, about: e.target.value })} />
         <input value={profile.contact_email || ''} placeholder="Contact email" onChange={(e) => setProfile({ ...profile, contact_email: e.target.value })} />

@@ -2,12 +2,12 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { getNormalizedJobUrl, hasExternalJobUrl } from '../utils/job';
 
-const JobCard = ({ job, onSave, onApply, canInteract = true, allowApply = false }) => {
+const JobCard = ({ job, onSave, onApply, canInteract = true, allowApply = false, animationIndex = 0 }) => {
   const jobUrl = getNormalizedJobUrl(job.url);
   const isExternal = hasExternalJobUrl(jobUrl);
 
   return (
-  <article className="card">
+  <article className="card job-card" style={{ '--enter-index': animationIndex }}>
     {job.source === 'employer' && <span className="badge">Direct Employer Post</span>}
     <h3>
       {isExternal ? (

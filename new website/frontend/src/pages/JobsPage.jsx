@@ -18,6 +18,7 @@ const JobsPage = () => {
   const [recommendedPage, setRecommendedPage] = useState(1);
   const [recommendedHasMore, setRecommendedHasMore] = useState(false);
   const [preferredSearch, setPreferredSearch] = useState('');
+  const skeletonCards = Array.from({ length: 6 }, (_, index) => index);
 
   const loadJobs = async ({ searchQuery = '', nextSkip = 0, append = false } = {}) => {
     setLoading(true);
@@ -179,17 +180,39 @@ const JobsPage = () => {
           <h3>Recommended Jobs for You</h3>
           <p className="muted">Direct employer jobs are always ranked first, then jobs with strongest skill match.</p>
           <div className="grid">
-            {recommended.map((job) => <JobCard key={`recommended-${job.id}`} job={job} onSave={saveJob} onApply={applyJob} />)}
+            {recommended.map((job, index) => (
+              <JobCard
+                key={`recommended-${job.id}`}
+                job={job}
+                onSave={saveJob}
+                onApply={applyJob}
+                animationIndex={index}
+              />
+            ))}
           </div>
           {recommendedHasMore && (
             <button type="button" className="btn-alt" onClick={loadMoreRecommended}>Load More Matches</button>
           )}
         </section>
       )}
-      {loading ? <p>Loading jobs...</p> : (
+      {loading ? (
+        <div className="grid">
+          {skeletonCards.map((item) => (
+            <article key={`skeleton-${item}`} className="card skeleton-card" aria-hidden="true">
+              <div className="skeleton-line skeleton-title" />
+              <div className="skeleton-line skeleton-meta" />
+              <div className="skeleton-line" />
+              <div className="skeleton-line" />
+              <div className="skeleton-line skeleton-short" />
+            </article>
+          ))}
+        </div>
+      ) : (
         <>
           <div className="grid">
-            {jobs.map((job) => <JobCard key={job.id} job={job} onSave={saveJob} onApply={applyJob} />)}
+            {jobs.map((job, index) => (
+              <JobCard key={job.id} job={job} onSave={saveJob} onApply={applyJob} animationIndex={index} />
+            ))}
           </div>
           {hasMoreJobs && (
             <button type="button" className="btn-alt" onClick={() => loadJobs({ nextSkip: skip, append: true })}>
