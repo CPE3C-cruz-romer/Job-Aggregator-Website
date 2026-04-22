@@ -2,6 +2,16 @@ from django.conf import settings
 from django.db import models
 
 
+def _resume_file_upload_path(instance, filename):
+    user_id = getattr(instance, 'user_id', 'unknown')
+    return f"resumes/user_{user_id}/files/{filename}"
+
+
+def _resume_image_upload_path(instance, filename):
+    user_id = getattr(instance, 'user_id', 'unknown')
+    return f"resumes/user_{user_id}/images/{filename}"
+
+
 class EmployerProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='employer_profile')
     company_name = models.CharField(max_length=255)
@@ -80,8 +90,8 @@ class Application(models.Model):
 
 class Resume(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='resume')
-    file = models.FileField(upload_to='resumes/', blank=True)
-    image = models.ImageField(upload_to='resume-images/', blank=True)
+    file = models.FileField(upload_to=_resume_file_upload_path, blank=True)
+    image = models.ImageField(upload_to=_resume_image_upload_path, blank=True)
     extracted_text = models.TextField(blank=True)
     uploaded_at = models.DateTimeField(auto_now=True)
 

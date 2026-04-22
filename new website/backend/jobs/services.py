@@ -291,6 +291,67 @@ def extract_text_from_image(file_obj):
         return ''
 
 
+def analyze_resume_image_quality(file_obj):
+    """
+    Lightweight readability checks for camera/image uploads.
+    Returns {readable: bool, reason: str, metrics: dict}.
+    """
+    try:
+        raw = file_obj.read()
+        if hasattr(file_obj, 'seek'):
+            file_obj.seek(0)
+        if not raw:
+            return {'readable': False, 'reason': 'Image is empty.', 'metrics': {}}
+
+        image = Image.open(BytesIO(raw)).convert('L')
+        width, height = image.size
+        if width < 900 or height < 900:
+            return {
+                'readable': False,
+                'reason': 'Image resolution is too low. Please retake in good lighting and closer to the document.',
+                'metrics': {'width': width, 'height': height},
+            }
+
+        histogram = image.histogram()
+        total = max(1, width * height)
+        dark_pixels = sum(histogram[:35])
+        bright_pixels = sum(histogram[220:])
+        low_contrast_ratio = (dark_pixels + bright_pixels) / total
+
+        # Simple sharpness proxy: edge intensity average after edge detection.
+        edges = image.filter(ImageFilter.FIND_EDGES)
+        edge_hist = edges.histogram()
+        edge_energy = sum(idx * count for idx, count in enumerate(edge_hist)) / total
+
+        if edge_energy < 5:
+            return {
+                'readable': False,
+                'reason': 'Image appears blurry. Please hold the camera steady and retake.',
+                'metrics': {'edge_energy': round(edge_energy, 2), 'width': width, 'height': height},
+            }
+
+        if low_contrast_ratio > 0.92:
+            return {
+                'readable': False,
+                'reason': 'Image contrast is too poor. Reduce glare or improve lighting and retake.',
+                'metrics': {'contrast_ratio': round(low_contrast_ratio, 3), 'width': width, 'height': height},
+            }
+
+        return {
+            'readable': True,
+            'reason': 'Image quality check passed.',
+            'metrics': {
+                'edge_energy': round(edge_energy, 2),
+                'contrast_ratio': round(low_contrast_ratio, 3),
+                'width': width,
+                'height': height,
+            },
+        }
+    except Exception as exc:
+        logger.info('Image quality analysis failed: %s', exc)
+        return {'readable': False, 'reason': 'Could not analyze image quality. Please upload a clearer image.', 'metrics': {}}
+
+
 def clean_extracted_text(text):
     """Normalize OCR/PDF extraction output for downstream skill matching."""
     if not text:

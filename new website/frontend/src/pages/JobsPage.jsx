@@ -7,34 +7,28 @@ import { parseApiError } from '../utils/error';
 import { getNormalizedJobUrl, hasExternalJobUrl } from '../utils/job';
 
 
-const INTEREST_KEYWORD_MAP = {
-  it: ['software engineer', 'backend developer', 'data analyst'],
-  engineering: ['software engineer', 'devops engineer', 'qa engineer'],
-  construction: ['construction manager', 'site engineer', 'foreman'],
-  accountant: ['accountant', 'bookkeeper', 'financial analyst'],
-  healthcare: ['registered nurse', 'medical assistant', 'healthcare coordinator'],
-  marketing: ['digital marketing specialist', 'seo specialist', 'content strategist'],
-  sales: ['sales representative', 'account executive', 'business development'],
+const normalizePreferenceTerms = (profile = {}) => {
+  const deduped = [];
+  const rawInterests = Array.isArray(profile.job_interests) ? profile.job_interests : [];
+  rawInterests.forEach((interest) => {
+    const normalized = String(interest || '').trim().toLowerCase();
+    if (normalized && !deduped.includes(normalized)) {
+      deduped.push(normalized);
+    }
+  });
+  return deduped.slice(0, 3);
 };
 
-const buildKeywordQuery = (profile = {}) => {
-  const keywords = [];
-  const push = (value) => {
-    const normalized = String(value || '').trim().toLowerCase();
-    if (normalized && !keywords.includes(normalized)) keywords.push(normalized);
-  };
+const buildPreferenceQueries = (profile = {}) => normalizePreferenceTerms(profile);
 
-  (profile.job_interests || []).forEach((interest) => {
-    push(interest);
-    (INTEREST_KEYWORD_MAP[String(interest).toLowerCase()] || []).forEach(push);
+const mergeJobsById = (existingJobs = [], incomingJobs = []) => {
+  const map = new Map();
+  [...existingJobs, ...incomingJobs].forEach((job) => {
+    if (job?.id !== undefined && job?.id !== null) {
+      map.set(job.id, job);
+    }
   });
-  (profile.skills || []).forEach(push);
-
-  ['software engineer', 'project coordinator', 'operations specialist'].forEach((fallback) => {
-    if (keywords.length < 3) push(fallback);
-  });
-
-  return keywords.slice(0, Math.max(3, keywords.length)).join(' ');
+  return Array.from(map.values());
 };
 
 const JobsPage = () => {
@@ -48,25 +42,35 @@ const JobsPage = () => {
   const [recommended, setRecommended] = useState([]);
   const [recommendedPage, setRecommendedPage] = useState(1);
   const [recommendedHasMore, setRecommendedHasMore] = useState(false);
-  const [preferredSearch, setPreferredSearch] = useState('');
+  const [preferredQueries, setPreferredQueries] = useState([]);
   const skeletonCards = Array.from({ length: 6 }, (_, index) => index);
 
-  const loadJobs = async ({ searchQuery = '', nextSkip = 0, append = false } = {}) => {
+  const loadJobs = async ({ searchQuery = '', searchQueries = [], nextSkip = 0, append = false } = {}) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
         limit: '10',
         skip: String(nextSkip),
       });
-      if (searchQuery) params.set('query', searchQuery);
+      const normalizedQueries = Array.isArray(searchQueries)
+        ? searchQueries.filter(Boolean).slice(0, 3)
+        : [];
+      if (normalizedQueries.length) {
+        normalizedQueries.forEach((query) => params.append('query', query));
+      } else if (searchQuery) {
+        params.set('query', searchQuery);
+      }
       const { data, headers } = await api.get(`/jobs/?${params.toString()}`);
       const payload = Array.isArray(data) ? data : (data?.results || []);
-      setJobs((prev) => (append ? [...prev, ...payload] : payload));
+      setJobs((prev) => (append ? mergeJobsById(prev, payload) : payload));
       setHasMoreJobs(headers['x-has-more'] === '1');
       setSkip(Number(headers['x-next-skip'] || nextSkip + 10));
     } catch (error) {
       console.error('Job list fetch failed:', error);
-      setMessage(parseApiError(error, 'Failed to fetch jobs. Please try again.'));
+      if (!append) {
+        setJobs([]);
+      }
+      setMessage(parseApiError(error, 'Unable to load jobs right now. Please retry in a moment.'));
     } finally {
       setLoading(false);
     }
@@ -77,9 +81,9 @@ const JobsPage = () => {
       try {
         const { data } = await api.get('/user/profile/');
         localStorage.setItem('userProfile', JSON.stringify(data));
-        const derivedQuery = buildKeywordQuery(data);
-        setPreferredSearch(derivedQuery.trim());
-        await loadJobs({ searchQuery: derivedQuery });
+        const derivedQueries = buildPreferenceQueries(data);
+        setPreferredQueries(derivedQueries);
+        await loadJobs({ searchQueries: derivedQueries });
       } catch {
         const profileRaw = localStorage.getItem('userProfile');
         if (!profileRaw) {
@@ -88,9 +92,9 @@ const JobsPage = () => {
         }
         try {
           const profile = JSON.parse(profileRaw);
-          const derivedQuery = buildKeywordQuery(profile);
-          setPreferredSearch(derivedQuery.trim());
-          loadJobs({ searchQuery: derivedQuery });
+          const derivedQueries = buildPreferenceQueries(profile);
+          setPreferredQueries(derivedQueries);
+          loadJobs({ searchQueries: derivedQueries });
         } catch {
           loadJobs();
         }
@@ -171,23 +175,23 @@ const JobsPage = () => {
   const refreshFromApi = async () => {
     setLoading(true);
     try {
-      const searchTerm = filters.title.trim() || preferredSearch || 'software engineer';
+      const searchTerm = filters.title.trim() || preferredQueries[0] || 'developer';
       const location = filters.location.trim() || 'united states';
       const params = new URLSearchParams({
         search: searchTerm,
         where: location,
         page: '1',
-        pages: '3',
-        results_per_page: '50',
+        pages: '1',
+        results_per_page: '25',
       });
 
       const { data } = await api.get(`/jobs/refresh/?${params.toString()}`);
       console.log('Refresh API response:', data);
-      await loadJobs({ searchQuery: searchTerm, nextSkip: 0, append: false });
+      await loadJobs({ searchQueries: filters.title.trim() ? [searchTerm] : preferredQueries, searchQuery: searchTerm, nextSkip: 0, append: false });
       setMessage(`Jobs refreshed for "${data.query}" in "${data.where}" (created: ${data.created}, updated: ${data.updated}).`);
     } catch (error) {
       console.error('Refresh from API failed:', error?.response?.data || error);
-      setMessage(parseApiError(error, 'Failed to fetch jobs. Please try again.'));
+      setMessage(parseApiError(error, 'Unable to refresh jobs from API right now.'));
     } finally {
       setLoading(false);
     }
@@ -242,7 +246,7 @@ const JobsPage = () => {
         <>
           <div className="grid">
             {jobs.map((job, index) => (
-              <JobCard key={job.id} job={job} onSave={saveJob} onApply={applyJob} animationIndex={index} />
+              <JobCard key={job.id} job={job} onSave={saveJob} onApply={applyJob} canInteract animationIndex={index} />
             ))}
           </div>
           {!jobs.length && <p className="muted">No jobs found yet. Try Refresh from API or adjust filters.</p>}

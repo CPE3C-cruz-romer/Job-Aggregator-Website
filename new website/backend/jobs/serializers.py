@@ -163,12 +163,29 @@ class UserProfileSerializer(serializers.ModelSerializer):
 class OnboardingSerializer(serializers.Serializer):
     job_interests = serializers.ListField(child=serializers.CharField(max_length=120), allow_empty=False, required=False)
     jobPreferences = serializers.ListField(child=serializers.CharField(max_length=120), allow_empty=False, required=False)
-    skills = serializers.ListField(child=serializers.CharField(max_length=120), allow_empty=False)
+    skills = serializers.ListField(child=serializers.CharField(max_length=120), allow_empty=True, required=False, default=list)
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
         interests = attrs.get('job_interests') or attrs.get('jobPreferences')
         if not interests:
             raise serializers.ValidationError({'jobPreferences': 'Select at least one job preference.'})
-        attrs['job_interests'] = interests
+
+        cleaned_interests = []
+        for item in interests:
+            normalized = str(item).strip().lower()
+            if normalized and normalized not in cleaned_interests:
+                cleaned_interests.append(normalized)
+
+        if len(cleaned_interests) > 3:
+            raise serializers.ValidationError({'jobPreferences': 'Select up to 3 job preferences only.'})
+
+        cleaned_skills = []
+        for item in attrs.get('skills', []):
+            normalized = str(item).strip().lower()
+            if normalized and normalized not in cleaned_skills:
+                cleaned_skills.append(normalized)
+
+        attrs['job_interests'] = cleaned_interests
+        attrs['skills'] = cleaned_skills
         return attrs

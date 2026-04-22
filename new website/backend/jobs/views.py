@@ -34,11 +34,30 @@ from .services import (
     extract_text_from_docx,
     extract_text_from_pdf,
     extract_text_from_image,
+    analyze_resume_image_quality,
     has_meaningful_resume_text,
     match_resume_skills,
     recommend_jobs_for_skills,
 )
 from .db_ready import ensure_db_ready
+
+
+INVALID_JOB_SOURCES = ('local-fallback', 'dummy', 'sample', 'practice', 'test')
+INVALID_JOB_TITLE_PATTERNS = (
+    'practice job',
+    'dummy job',
+    'sample job',
+    'test job',
+)
+
+
+def _exclude_non_production_jobs(queryset):
+    return queryset.exclude(
+        Q(source__in=INVALID_JOB_SOURCES)
+        | Q(url__icontains='example.com/jobs')
+        | Q(title__iregex=r'^\s*(practice|dummy|sample|test)\b')
+        | reduce(lambda acc, pattern: acc | Q(title__icontains=pattern), INVALID_JOB_TITLE_PATTERNS, Q())
+    )
 
 
 def _token_response(user):
@@ -221,7 +240,7 @@ class JobViewSet(viewsets.ModelViewSet):
     search_fields = ['title', 'location', 'company', 'description']
 
     def get_queryset(self):
-        queryset = Job.objects.select_related('posted_by_employer').all()
+        queryset = _exclude_non_production_jobs(Job.objects.select_related('posted_by_employer').all())
         query = (self.request.query_params.get('search') or self.request.query_params.get('query') or '').strip()
         title = (self.request.query_params.get('title') or '').strip()
         location = (self.request.query_params.get('location') or '').strip()
@@ -237,7 +256,16 @@ class JobViewSet(viewsets.ModelViewSet):
 
         if normalized_words:
             keyword_q = reduce(
-                lambda acc, word: acc | Q(title__icontains=word) | Q(category__icontains=word),
+                lambda acc, word: (
+                    acc
+                    | Q(title__icontains=word)
+                    | Q(category__icontains=word)
+                    | Q(company__icontains=word)
+                    | Q(location__icontains=word)
+                    | Q(description__icontains=word)
+                    | Q(requirements__icontains=word)
+                    | Q(required_skills__icontains=word)
+                ),
                 normalized_words,
                 Q(),
             )
@@ -307,6 +335,34 @@ class JobViewSet(viewsets.ModelViewSet):
             'marketing': ['digital marketing specialist', 'seo specialist', 'content strategist'],
             'sales': ['sales representative', 'account executive', 'business development'],
         }
+
+    @classmethod
+    def _generate_user_queries(cls, interests, skills, max_queries=3):
+        mapping = cls._interest_mapping()
+        queries = []
+
+        def _push(value):
+            normalized = str(value).strip().lower()
+            if normalized and normalized not in queries:
+                queries.append(normalized)
+
+        for interest in cls._normalize_terms(interests):
+            variants = [interest] + mapping.get(interest, [])
+            phrase = ' '.join([term for term in variants[:2] if term]).strip()
+            _push(phrase or interest)
+
+        for skill in cls._normalize_terms(skills):
+            if len(queries) >= max_queries:
+                break
+            _push(f"{skill} jobs")
+
+        fallback_queries = ['software engineer jobs', 'operations specialist jobs', 'project coordinator jobs']
+        for fallback in fallback_queries:
+            if len(queries) >= max_queries:
+                break
+            _push(fallback)
+
+        return queries[:max_queries]
 
     @classmethod
     def _expand_interest_terms(cls, interests):
@@ -444,7 +500,8 @@ class JobViewSet(viewsets.ModelViewSet):
 
         normalized_interests = self._normalize_terms(interests)
         normalized_skills = self._normalize_terms(skills)
-        query_keywords = self._build_personalized_keywords(normalized_interests, normalized_skills, minimum=3)
+        generated_queries = self._generate_user_queries(normalized_interests, normalized_skills, max_queries=3)
+        query_keywords = self._build_personalized_keywords(normalized_interests, normalized_skills, minimum=1)
         page = max(1, self._safe_int(request.query_params.get('page'), 1))
         limit = min(25, max(1, self._safe_int(request.query_params.get('limit'), 10)))
 
@@ -452,10 +509,10 @@ class JobViewSet(viewsets.ModelViewSet):
         cache_key = f"jobs_match:{profile_scope}:{','.join(sorted(normalized_interests))}:{','.join(sorted(normalized_skills))}"
         ranked_ids = cache.get(cache_key)
         if ranked_ids is None:
-            jobs = Job.objects.select_related('posted_by_employer').all()
-            if query_keywords:
+            jobs = _exclude_non_production_jobs(Job.objects.select_related('posted_by_employer').all())
+            if generated_queries or query_keywords:
                 query_filter = Q()
-                for term in query_keywords:
+                for term in generated_queries + query_keywords:
                     query_filter |= Q(title__icontains=term) | Q(category__icontains=term) | Q(description__icontains=term)
                 jobs = jobs.filter(query_filter).distinct()
             ranked_jobs = self._rank_jobs(jobs, normalized_interests, normalized_skills)
@@ -474,6 +531,7 @@ class JobViewSet(viewsets.ModelViewSet):
             {
                 'interests': normalized_interests,
                 'skills': normalized_skills,
+                'generated_queries': generated_queries,
                 'query_keywords': query_keywords,
                 'count': total,
                 'page': page,
@@ -710,7 +768,9 @@ class UserProfileViewSet(viewsets.ModelViewSet):
         profile.skills = serializer.validated_data['skills']
         profile.onboarding_completed = True
         profile.save(update_fields=['job_interests', 'skills', 'onboarding_completed', 'updated_at'])
-        return Response(self.get_serializer(profile).data, status=status.HTTP_200_OK)
+        payload = self.get_serializer(profile).data
+        payload['generated_queries'] = JobViewSet._generate_user_queries(profile.job_interests, profile.skills, max_queries=3)
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 class ResumeViewSet(viewsets.ModelViewSet):
@@ -750,6 +810,7 @@ class ResumeViewSet(viewsets.ModelViewSet):
             resume.file = None
 
         extracted_text = ''
+        image_quality = None
         nickname = (request.data.get('nickname') or '').strip()
         if uploaded_file and resume.file:
             low_name = resume.file.name.lower()
@@ -760,11 +821,12 @@ class ResumeViewSet(viewsets.ModelViewSet):
                     extracted_text = clean_extracted_text(extract_text_from_docx(resume_file))
         elif uploaded_image and resume.image:
             with resume.image.open('rb') as image_file:
-                if image_contains_face(image_file):
+                image_quality = analyze_resume_image_quality(image_file)
+                if not image_quality['readable']:
                     resume.extracted_text = ''
                     resume.save(update_fields=['image', 'file', 'extracted_text'])
                     return Response(
-                        {'error': 'Invalid resume file. Please upload a document with text content.'},
+                        {'error': image_quality['reason'], 'image_quality': image_quality},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
                 extracted_text = extract_text_from_image(image_file)
@@ -783,7 +845,10 @@ class ResumeViewSet(viewsets.ModelViewSet):
         resume.extracted_text = extracted_text
         resume.save(update_fields=['image', 'file', 'extracted_text'])
 
-        return Response(self.get_serializer(resume).data, status=status.HTTP_201_CREATED)
+        payload = self.get_serializer(resume).data
+        if image_quality:
+            payload['image_quality'] = image_quality
+        return Response(payload, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['get'])
     def recommendations(self, request):
@@ -796,7 +861,7 @@ class ResumeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        jobs = Job.objects.all()
+        jobs = _exclude_non_production_jobs(Job.objects.all())
         if not jobs.exists():
             return Response({'error': 'No jobs available for matching yet.'}, status=status.HTTP_404_NOT_FOUND)
 

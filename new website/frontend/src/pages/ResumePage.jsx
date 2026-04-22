@@ -1,8 +1,11 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { parseApiError } from '../utils/error';
 import { getNormalizedJobUrl, hasExternalJobUrl } from '../utils/job';
+import useResumeCamera from '../modules/resumeUpload/useResumeCamera';
+import ResumeCameraPanel from '../modules/resumeUpload/ResumeCameraPanel';
+import { buildResumeUploadFormData } from '../modules/resumeUpload/formData';
 
 const ResumePage = () => {
   const navigate = useNavigate();
@@ -14,14 +17,22 @@ const ResumePage = () => {
   const [recommendations, setRecommendations] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [streaming, setStreaming] = useState(false);
-  const [captureBlob, setCaptureBlob] = useState(null);
-  const [faceWelcomeMessage, setFaceWelcomeMessage] = useState('');
-  const [facingMode, setFacingMode] = useState('environment');
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const detectionFrameRef = useRef(null);
-  const faceDetectorRef = useRef(null);
+  const [confirmedCaptureBlob, setConfirmedCaptureBlob] = useState(null);
+
+  const {
+    videoRef,
+    canvasRef,
+    streaming,
+    captureBlob,
+    previewUrl,
+    cameraError,
+    facingMode,
+    setFacingMode,
+    resetCapture,
+    startCamera,
+    stopCamera,
+    capture,
+  } = useResumeCamera();
 
   const fetchRecommendations = async () => {
     const { data } = await api.get('/resume/recommendations/');
@@ -36,7 +47,7 @@ const ResumePage = () => {
   };
 
   const upload = async () => {
-    if (!file && !captureBlob) {
+    if (!file && !confirmedCaptureBlob) {
       setError('Please upload a PDF or capture a resume image first.');
       return;
     }
@@ -45,17 +56,12 @@ const ResumePage = () => {
     resetSkillMatchingState();
 
     try {
-      const form = new FormData();
-      if (file?.type?.startsWith('image/')) {
-        form.append('image', file, file.name || 'resume-image');
-      } else if (file) {
-        form.append('file', file);
-      }
-      if (captureBlob) form.append('image', captureBlob, 'resume-capture.jpg');
-      if (nickname.trim()) form.append('nickname', nickname.trim());
-
+      const form = buildResumeUploadFormData({ file, captureBlob: confirmedCaptureBlob, nickname });
       const { data } = await api.post('/resume/', form);
       setInfo(`Resume uploaded at ${new Date(data.uploaded_at).toLocaleString()}`);
+      if (data.image_quality?.reason) {
+        setInfo((prev) => `${prev} • ${data.image_quality.reason}`);
+      }
       if (data.ocr_warning) setInfo((prev) => `${prev} • ${data.ocr_warning}`);
 
       try {
@@ -114,61 +120,6 @@ const ResumePage = () => {
     }
   };
 
-  const stopCamera = () => {
-    if (detectionFrameRef.current) {
-      cancelAnimationFrame(detectionFrameRef.current);
-      detectionFrameRef.current = null;
-    }
-    const tracks = videoRef.current?.srcObject?.getTracks() || [];
-    tracks.forEach((t) => t.stop());
-    setStreaming(false);
-  };
-
-  const startCamera = async () => {
-    setError('');
-    setFaceWelcomeMessage('');
-    stopCamera();
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facingMode } } });
-    videoRef.current.srcObject = stream;
-    setStreaming(true);
-
-    if (!('FaceDetector' in window)) return;
-    if (!faceDetectorRef.current) {
-      faceDetectorRef.current = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
-    }
-
-    const detectFace = async () => {
-      if (!videoRef.current || videoRef.current.readyState < 2) {
-        detectionFrameRef.current = requestAnimationFrame(detectFace);
-        return;
-      }
-
-      const faces = await faceDetectorRef.current.detect(videoRef.current);
-      if (faces.length > 0) {
-        setMatch(null);
-        setRecommendations(null);
-        setInfo('');
-        setError('');
-        setCaptureBlob(null);
-        setFaceWelcomeMessage('Hello, welcome to our website. Thank you for using it!');
-        stopCamera();
-        return;
-      }
-
-      detectionFrameRef.current = requestAnimationFrame(detectFace);
-    };
-
-    detectionFrameRef.current = requestAnimationFrame(detectFace);
-  };
-
-  const capture = () => {
-    const canvas = canvasRef.current;
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
-    canvas.getContext('2d').drawImage(videoRef.current, 0, 0);
-    canvas.toBlob((blob) => setCaptureBlob(blob), 'image/jpeg', 0.95);
-  };
-
   return (
     <section className="page">
       <h2>Resume Upload, Skill Match & Recommended Jobs</h2>
@@ -187,23 +138,39 @@ const ResumePage = () => {
         </div>
       </div>
 
-      <div className="card">
-        <h3>Camera Capture</h3>
-        <div className="actions">
-          {!streaming && <button className="btn-alt" onClick={startCamera}>Start Camera</button>}
-          {!streaming && (
-            <button type="button" className="btn-alt" onClick={() => setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'))}>
-              Use {facingMode === 'user' ? 'Back' : 'Front'} Camera
-            </button>
-          )}
-          {streaming && <button className="btn-alt" onClick={capture}>Capture Resume</button>}
-          {streaming && <button className="btn-alt" onClick={stopCamera}>Stop Camera</button>}
-        </div>
-        <video ref={videoRef} autoPlay className="camera" />
-        <canvas ref={canvasRef} className="camera hidden" />
-        {captureBlob && <p className="status">Captured image is ready. Click Upload Resume.</p>}
-        {faceWelcomeMessage && <p className="status">{faceWelcomeMessage}</p>}
-      </div>
+      <ResumeCameraPanel
+        streaming={streaming}
+        facingMode={facingMode}
+        onToggleFacingMode={() => setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'))}
+        onStart={() => {
+          setError('');
+          startCamera({
+            onReset: () => {
+              setConfirmedCaptureBlob(null);
+              setMatch(null);
+              setRecommendations(null);
+              setInfo('');
+              setError('');
+            },
+          });
+        }}
+        onCapture={capture}
+        onStop={stopCamera}
+        onConfirmCapture={() => {
+          setConfirmedCaptureBlob(captureBlob);
+          setInfo('Capture confirmed. You can upload resume now.');
+        }}
+        onRetake={() => {
+          setConfirmedCaptureBlob(null);
+          resetCapture();
+          startCamera();
+        }}
+        videoRef={videoRef}
+        canvasRef={canvasRef}
+        captureBlob={captureBlob}
+        previewUrl={previewUrl}
+        cameraError={cameraError}
+      />
 
       {info && <p className="status">{info}</p>}
       {error && <p className="error">{error}</p>}
@@ -255,6 +222,8 @@ const ResumePage = () => {
             className="btn-alt"
             onClick={() => {
               setJobId('');
+              setConfirmedCaptureBlob(null);
+              resetCapture();
               resetSkillMatchingState();
             }}
             disabled={loading}
