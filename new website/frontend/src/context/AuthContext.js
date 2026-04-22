@@ -9,6 +9,7 @@ export const AuthProvider = ({ children }) => {
     return raw ? JSON.parse(raw) : null;
   });
   const [isEmployer, setIsEmployer] = useState(() => localStorage.getItem('isEmployer') === '1');
+  const [onboardingCompleted, setOnboardingCompleted] = useState(() => localStorage.getItem('onboardingCompleted') === '1');
   const isAuthenticated = Boolean(user) && Boolean(localStorage.getItem('accessToken') || localStorage.getItem('token'));
 
   const syncAuth = (data) => {
@@ -16,8 +17,10 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('refreshToken', data.refresh);
     localStorage.setItem('user', JSON.stringify(data.user));
     localStorage.setItem('isEmployer', data.is_employer ? '1' : '0');
+    localStorage.setItem('onboardingCompleted', data.onboarding_completed ? '1' : '0');
     setUser(data.user);
     setIsEmployer(Boolean(data.is_employer));
+    setOnboardingCompleted(Boolean(data.onboarding_completed));
   };
 
   const login = async (username, password) => {
@@ -52,11 +55,24 @@ export const AuthProvider = ({ children }) => {
     localStorage.clear();
     setUser(null);
     setIsEmployer(false);
+    setOnboardingCompleted(false);
   };
 
   const value = useMemo(
-    () => ({ user, isEmployer, isAuthenticated, login, loginEmployer, loginWithGoogle, register, registerEmployer, logout }),
-    [user, isEmployer, isAuthenticated]
+    () => ({
+      user,
+      isEmployer,
+      onboardingCompleted,
+      isAuthenticated,
+      login,
+      loginEmployer,
+      loginWithGoogle,
+      register,
+      registerEmployer,
+      logout,
+      setOnboardingCompleted,
+    }),
+    [user, isEmployer, onboardingCompleted, isAuthenticated]
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

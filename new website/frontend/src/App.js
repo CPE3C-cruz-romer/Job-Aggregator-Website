@@ -14,17 +14,29 @@ import EmployerRegisterPage from './pages/EmployerRegisterPage';
 import EmployerHomePage from './pages/EmployerHomePage';
 import EmployerPortalPage from './pages/EmployerPortalPage';
 import JobDetailsPage from './pages/JobDetailsPage';
+import OnboardingPage from './pages/OnboardingPage';
+import UserProfilePage from './pages/UserProfilePage';
+import EmployerProfilePage from './pages/EmployerProfilePage';
 import { useAuth } from './context/AuthContext';
 
 const PrivateRoute = ({ children }) => {
-  const { isAuthenticated } = useAuth();
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
+  const { isAuthenticated, isEmployer, onboardingCompleted } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isEmployer && !onboardingCompleted) return <Navigate to="/onboarding" replace />;
+  return children;
 };
 
 const EmployerRoute = ({ children }) => {
   const { isAuthenticated, isEmployer } = useAuth();
   if (!isAuthenticated) return <Navigate to="/employer/login" replace />;
   return isEmployer ? children : <Navigate to="/jobs" replace />;
+};
+
+const OnboardingRoute = ({ children }) => {
+  const { isAuthenticated, isEmployer, onboardingCompleted } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (isEmployer || onboardingCompleted) return <Navigate to="/jobs" replace />;
+  return children;
 };
 
 const App = () => (
@@ -45,6 +57,9 @@ const App = () => (
       <Route path="/saved" element={<PrivateRoute><SavedJobsPage /></PrivateRoute>} />
       <Route path="/applications" element={<PrivateRoute><ApplicationTrackerPage /></PrivateRoute>} />
       <Route path="/resume" element={<PrivateRoute><ResumePage /></PrivateRoute>} />
+      <Route path="/onboarding" element={<OnboardingRoute><OnboardingPage /></OnboardingRoute>} />
+      <Route path="/profile" element={<PrivateRoute><UserProfilePage /></PrivateRoute>} />
+      <Route path="/employer/profile" element={<EmployerRoute><EmployerProfilePage /></EmployerRoute>} />
     </Routes>
     <Footer />
   </div>

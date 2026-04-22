@@ -22,7 +22,9 @@ const Navbar = () => {
           <NavLink to="/jobs" onClick={closeMenu}>Jobs</NavLink>
           {!isEmployer && <NavLink to="/employer" onClick={closeMenu}>For Employers</NavLink>}
           {isEmployer && <NavLink to="/employer/workspace" onClick={closeMenu}>Employer Workspace</NavLink>}
+          {isEmployer && <NavLink to="/employer/profile" onClick={closeMenu}>Employer Profile</NavLink>}
           {user && <NavLink to="/saved" onClick={closeMenu}>Saved</NavLink>}
+          {user && !isEmployer && <NavLink to="/profile" onClick={closeMenu}>My Profile</NavLink>}
           {user && <NavLink to="/resume" onClick={closeMenu}>Resume Match</NavLink>}
         </nav>
 

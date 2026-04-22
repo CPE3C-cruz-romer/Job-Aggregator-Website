@@ -16,8 +16,8 @@ const LoginPage = () => {
     setError('');
     setLoading(true);
     try {
-      await login(form.username, form.password);
-      navigate('/jobs');
+      const data = await login(form.username, form.password);
+      navigate(data?.is_employer || data?.onboarding_completed ? '/jobs' : '/onboarding');
     } catch (err) {
       setError(parseApiError(err, 'Invalid email or password.'));
     } finally {
@@ -29,8 +29,8 @@ const LoginPage = () => {
     setError('');
     setLoading(true);
     try {
-      await loginWithGoogle(credential);
-      navigate('/jobs');
+      const data = await loginWithGoogle(credential);
+      navigate(data?.is_employer || data?.onboarding_completed ? '/jobs' : '/onboarding');
     } catch (err) {
       setError(parseApiError(err, 'Google login failed.'));
     } finally {

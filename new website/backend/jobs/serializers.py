@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from .models import EmployerProfile, Job, SavedJob, Application, Resume
+from .models import EmployerProfile, Job, SavedJob, Application, Resume, UserProfile
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
@@ -53,11 +53,23 @@ class EmployerProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EmployerProfile
-        fields = ('id', 'username', 'company_name', 'contact_email', 'contact_phone', 'website', 'about', 'created_at')
+        fields = (
+            'id',
+            'username',
+            'company_name',
+            'contact_email',
+            'contact_phone',
+            'website',
+            'about',
+            'logo_url',
+            'created_at',
+        )
 
 
 class JobSerializer(serializers.ModelSerializer):
     posted_by_company = serializers.CharField(source='posted_by_employer.company_name', read_only=True)
+    match_score = serializers.IntegerField(read_only=True)
+    matching_skills_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Job
@@ -87,3 +99,29 @@ class ResumeSerializer(serializers.ModelSerializer):
         model = Resume
         fields = ('id', 'file', 'image', 'extracted_text', 'uploaded_at')
         read_only_fields = ('extracted_text', 'uploaded_at')
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    email = serializers.EmailField(source='user.email', read_only=True)
+
+    class Meta:
+        model = UserProfile
+        fields = (
+            'id',
+            'username',
+            'email',
+            'full_name',
+            'job_interests',
+            'skills',
+            'experience',
+            'profile_picture_url',
+            'onboarding_completed',
+            'updated_at',
+        )
+        read_only_fields = ('updated_at',)
+
+
+class OnboardingSerializer(serializers.Serializer):
+    job_interests = serializers.ListField(child=serializers.CharField(max_length=120), allow_empty=False)
+    skills = serializers.ListField(child=serializers.CharField(max_length=120), allow_empty=False)

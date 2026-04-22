@@ -17,7 +17,7 @@ const RegisterPage = () => {
     setLoading(true);
     try {
       await register(form);
-      navigate('/jobs');
+      navigate('/onboarding');
     } catch (err) {
       setError(parseApiError(err, 'Registration failed.'));
     } finally {
@@ -29,8 +29,8 @@ const RegisterPage = () => {
     setError('');
     setLoading(true);
     try {
-      await loginWithGoogle(credential);
-      navigate('/jobs');
+      const data = await loginWithGoogle(credential);
+      navigate(data?.onboarding_completed ? '/jobs' : '/onboarding');
     } catch (err) {
       setError(parseApiError(err, 'Google registration/login failed.'));
     } finally {

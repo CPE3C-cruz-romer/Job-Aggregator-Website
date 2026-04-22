@@ -10,6 +10,7 @@ from .views import (
     google_login_view,
     JobViewSet,
     EmployerProfileViewSet,
+    UserProfileViewSet,
     EmployerJobViewSet,
     SavedJobViewSet,
     ApplicationViewSet,
@@ -20,6 +21,7 @@ router = DefaultRouter()
 router.register(r'jobs', JobViewSet, basename='jobs')
 router.register(r'employer/profile', EmployerProfileViewSet, basename='employer-profile')
 router.register(r'employer/jobs', EmployerJobViewSet, basename='employer-jobs')
+router.register(r'user/profile', UserProfileViewSet, basename='user-profile')
 router.register(r'save-job', SavedJobViewSet, basename='save-job')
 router.register(r'apply', ApplicationViewSet, basename='apply')
 router.register(r'resume', ResumeViewSet, basename='resume')

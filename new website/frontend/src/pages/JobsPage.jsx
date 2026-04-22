@@ -12,6 +12,7 @@ const JobsPage = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [filters, setFilters] = useState({ title: '', location: '', company: '' });
+  const [recommended, setRecommended] = useState([]);
 
   const loadJobs = async (searchQuery = '') => {
     setLoading(true);
@@ -28,6 +29,19 @@ const JobsPage = () => {
   };
 
   useEffect(() => { loadJobs(); }, []);
+  useEffect(() => {
+    const loadMatches = async () => {
+      const token = localStorage.getItem('accessToken');
+      if (!token) return;
+      try {
+        const { data } = await api.get('/jobs/match/');
+        setRecommended(data.results || []);
+      } catch {
+        setRecommended([]);
+      }
+    };
+    loadMatches();
+  }, []);
 
   const saveJob = async (jobId) => {
     const token = localStorage.getItem('accessToken');
@@ -109,6 +123,15 @@ const JobsPage = () => {
       />
       <button className="btn" onClick={refreshFromApi}>Refresh from API</button>
       {message && <p className="status">{message}</p>}
+      {recommended.length > 0 && (
+        <section className="card">
+          <h3>Recommended Jobs for You</h3>
+          <p className="muted">Direct employer jobs are always ranked first, then jobs with strongest skill match.</p>
+          <div className="grid">
+            {recommended.slice(0, 6).map((job) => <JobCard key={`recommended-${job.id}`} job={job} onSave={saveJob} onApply={applyJob} />)}
+          </div>
+        </section>
+      )}
       {loading ? <p>Loading jobs...</p> : (
         <div className="grid">
           {jobs.map((job) => <JobCard key={job.id} job={job} onSave={saveJob} onApply={applyJob} />)}

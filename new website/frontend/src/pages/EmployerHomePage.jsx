@@ -7,6 +7,9 @@ const EMPTY_FORM = {
   company: '',
   location: '',
   description: '',
+  category: '',
+  required_skills: '',
+  salary: '',
   url: '',
 };
 
@@ -16,6 +19,7 @@ const EmployerHomePage = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [success, setSuccess] = useState(false);
+  const [applicants, setApplicants] = useState([]);
 
   const updateField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
@@ -52,7 +56,10 @@ const EmployerHomePage = () => {
     setMessage('');
     setSuccess(false);
     try {
-      await api.post('/employer/jobs/', form);
+      await api.post('/employer/jobs/', {
+        ...form,
+        required_skills: form.required_skills.split(',').map((item) => item.trim()).filter(Boolean),
+      });
       setMessage('Job posted successfully. Your job is now live.');
       setSuccess(true);
       setForm((prev) => ({ ...EMPTY_FORM, company: prev.company }));
@@ -75,6 +82,15 @@ const EmployerHomePage = () => {
     }
   };
 
+  const loadApplicants = async (jobId) => {
+    try {
+      const { data } = await api.get(`/apply/employer/job/${jobId}/applicants/`);
+      setApplicants(data);
+    } catch (error) {
+      setMessage(parseApiError(error, 'Failed to load applicants.'));
+    }
+  };
+
   return (
     <section className="page">
       <div className="hero compact">
@@ -89,6 +105,9 @@ const EmployerHomePage = () => {
           <input value={form.title} placeholder="Job title" onChange={(e) => updateField('title', e.target.value)} required />
           <input value={form.company} placeholder="Company name" onChange={(e) => updateField('company', e.target.value)} required />
           <input value={form.location} placeholder="Location" onChange={(e) => updateField('location', e.target.value)} required />
+          <input value={form.category} placeholder="Category (IT, Construction, Accountant)" onChange={(e) => updateField('category', e.target.value)} />
+          <input value={form.required_skills} placeholder="Required skills (comma separated)" onChange={(e) => updateField('required_skills', e.target.value)} />
+          <input value={form.salary} placeholder="Salary (optional)" onChange={(e) => updateField('salary', e.target.value)} />
           <input value={form.url} placeholder="Optional application URL (https://...)" onChange={(e) => updateField('url', e.target.value)} />
         </div>
         <textarea value={form.description} placeholder="Job description" onChange={(e) => updateField('description', e.target.value)} required />
@@ -107,6 +126,7 @@ const EmployerHomePage = () => {
                 <p className="desc">{job.description?.slice(0, 180)}...</p>
                 {job.requirements && <p className="muted"><strong>Requirements:</strong> {job.requirements.slice(0, 120)}...</p>}
                 <div className="actions">
+                  <button type="button" className="btn-alt" onClick={() => loadApplicants(job.id)}>View Applicants</button>
                   <button type="button" className="btn danger" onClick={() => removeJob(job.id)}>Remove</button>
                 </div>
               </article>
@@ -114,6 +134,22 @@ const EmployerHomePage = () => {
           </div>
         )}
       </section>
+      {applicants.length > 0 && (
+        <section className="card">
+          <h3>Applicants</h3>
+          <div className="grid">
+            {applicants.map((item) => (
+              <article className="card" key={item.application_id}>
+                <h4>{item.applicant.full_name || item.applicant.username}</h4>
+                <p className="muted">{item.applicant.email}</p>
+                <p><strong>Skills:</strong> {(item.applicant.skills || []).join(', ') || 'N/A'}</p>
+                <p><strong>Interests:</strong> {(item.applicant.job_interests || []).join(', ') || 'N/A'}</p>
+                <p><strong>Experience:</strong> {item.applicant.experience || 'N/A'}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
     </section>
   );
 };

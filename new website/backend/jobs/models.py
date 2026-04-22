@@ -9,6 +9,7 @@ class EmployerProfile(models.Model):
     contact_phone = models.CharField(max_length=50, blank=True)
     website = models.URLField(blank=True)
     about = models.TextField(blank=True)
+    logo_url = models.URLField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -21,8 +22,12 @@ class Job(models.Model):
     location = models.CharField(max_length=255)
     description = models.TextField()
     requirements = models.TextField(blank=True)
+    category = models.CharField(max_length=120, blank=True)
+    required_skills = models.JSONField(default=list, blank=True)
+    salary = models.CharField(max_length=120, blank=True)
     url = models.URLField(unique=True, blank=True, null=True)
     source = models.CharField(max_length=50, default='adzuna')
+    is_direct_employer = models.BooleanField(default=False)
     priority_score = models.IntegerField(default=0)
     posted_by_employer = models.ForeignKey(
         EmployerProfile,
@@ -82,3 +87,17 @@ class Resume(models.Model):
 
     def __str__(self):
         return f"Resume({self.user.username})"
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
+    full_name = models.CharField(max_length=255, blank=True)
+    job_interests = models.JSONField(default=list, blank=True)
+    skills = models.JSONField(default=list, blank=True)
+    experience = models.TextField(blank=True)
+    profile_picture_url = models.URLField(blank=True)
+    onboarding_completed = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"UserProfile({self.user.username})"

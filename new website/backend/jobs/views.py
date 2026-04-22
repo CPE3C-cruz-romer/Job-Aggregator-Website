@@ -4,6 +4,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.db import IntegrityError
+from django.db.models import Q
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from rest_framework import status, viewsets
@@ -13,11 +14,13 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import EmployerProfile, Job, SavedJob, Application, Resume
+from .models import EmployerProfile, Job, SavedJob, Application, Resume, UserProfile
 from .serializers import (
     UserRegisterSerializer,
     EmployerRegisterSerializer,
     EmployerProfileSerializer,
+    UserProfileSerializer,
+    OnboardingSerializer,
     JobSerializer,
     SavedJobSerializer,
     ApplicationSerializer,
@@ -37,12 +40,14 @@ from .db_ready import ensure_db_ready
 
 
 def _token_response(user):
+    profile, _ = UserProfile.objects.get_or_create(user=user)
     refresh = RefreshToken.for_user(user)
     return {
         'user': {'id': user.id, 'username': user.username, 'email': user.email},
         'access': str(refresh.access_token),
         'refresh': str(refresh),
         'is_employer': hasattr(user, 'employer_profile'),
+        'onboarding_completed': profile.onboarding_completed,
     }
 
 
@@ -208,6 +213,38 @@ class JobViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
     search_fields = ['title', 'location', 'company', 'description']
 
+    def get_queryset(self):
+        queryset = Job.objects.select_related('posted_by_employer').all()
+        query = (self.request.query_params.get('search') or '').strip()
+        title = (self.request.query_params.get('title') or '').strip()
+        location = (self.request.query_params.get('location') or '').strip()
+        company = (self.request.query_params.get('company') or '').strip()
+        category = (self.request.query_params.get('category') or '').strip()
+        skills_param = (self.request.query_params.get('skills') or '').strip()
+
+        if query:
+            queryset = queryset.filter(
+                Q(title__icontains=query)
+                | Q(company__icontains=query)
+                | Q(location__icontains=query)
+                | Q(description__icontains=query)
+            )
+        if title:
+            queryset = queryset.filter(title__icontains=title)
+        if location:
+            queryset = queryset.filter(location__icontains=location)
+        if company:
+            queryset = queryset.filter(company__icontains=company)
+        if category:
+            queryset = queryset.filter(category__icontains=category)
+
+        if skills_param:
+            skills = [skill.strip().lower() for skill in skills_param.split(',') if skill.strip()]
+            for skill in skills:
+                queryset = queryset.filter(required_skills__icontains=skill)
+
+        return queryset
+
     @staticmethod
     def _pick_param(request, *names, default=''):
         for name in names:
@@ -263,13 +300,85 @@ class JobViewSet(viewsets.ModelViewSet):
         }
         return Response(response_payload)
 
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def match(self, request):
+        user_id = request.query_params.get('userId')
+        interests = request.query_params.getlist('interests')
+        skills = request.query_params.getlist('skills')
 
-class EmployerProfileViewSet(viewsets.ReadOnlyModelViewSet):
+        profile = None
+        if user_id:
+            profile = UserProfile.objects.filter(user_id=user_id).first()
+        elif request.user.is_authenticated:
+            profile = UserProfile.objects.filter(user=request.user).first()
+
+        if profile and not interests:
+            interests = profile.job_interests or []
+        if profile and not skills:
+            skills = profile.skills or []
+
+        normalized_interests = [item.strip().lower() for item in interests if str(item).strip()]
+        normalized_skills = [item.strip().lower() for item in skills if str(item).strip()]
+
+        jobs = Job.objects.select_related('posted_by_employer').all()
+        ranked_jobs = []
+        for job in jobs:
+            required = [str(item).strip().lower() for item in (job.required_skills or []) if str(item).strip()]
+            category_match = 1 if normalized_interests and (job.category or '').strip().lower() in normalized_interests else 0
+            skill_matches = len(set(required).intersection(normalized_skills))
+            score = (5 * category_match) + (2 * skill_matches)
+            if job.is_direct_employer:
+                score += 1000
+            ranked_jobs.append((job, score, skill_matches))
+
+        ranked_jobs.sort(
+            key=lambda item: (
+                1 if item[0].is_direct_employer else 0,
+                item[1],
+                item[2],
+                item[0].created_at.timestamp(),
+            ),
+            reverse=True,
+        )
+
+        ordered = []
+        for job, score, skill_matches in ranked_jobs:
+            job.match_score = score
+            job.matching_skills_count = skill_matches
+            ordered.append(job)
+
+        return Response(
+            {
+                'interests': normalized_interests,
+                'skills': normalized_skills,
+                'count': len(ordered),
+                'results': JobSerializer(ordered, many=True).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class EmployerProfileViewSet(viewsets.ModelViewSet):
     serializer_class = EmployerProfileSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return EmployerProfile.objects.filter(user=self.request.user)
+
+    def list(self, request, *args, **kwargs):
+        profile = EmployerProfile.objects.filter(user=request.user).first()
+        if not profile:
+            return Response([], status=status.HTTP_200_OK)
+        return Response(self.get_serializer(profile).data, status=status.HTTP_200_OK)
+
+    def partial_update(self, request, *args, **kwargs):
+        profile = EmployerProfile.objects.filter(user=request.user).first()
+        if not profile:
+            return Response({'detail': 'Employer profile not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = self.get_serializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class EmployerJobViewSet(viewsets.ModelViewSet):
@@ -296,6 +405,7 @@ class EmployerJobViewSet(viewsets.ModelViewSet):
         payload['company'] = str(payload.get('company', '')).strip()
         payload['source'] = 'employer'
         payload['priority_score'] = 100
+        payload['is_direct_employer'] = True
         payload['posted_by_employer'] = request.user.employer_profile.id
         url_value = str(payload.get('url', '')).strip()
         payload['url'] = url_value or None
@@ -349,10 +459,85 @@ class ApplicationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Application.objects.filter(user=self.request.user).select_related('job')
+        queryset = Application.objects.filter(user=self.request.user).select_related('job', 'user')
+        if hasattr(self.request.user, 'employer_profile'):
+            queryset = Application.objects.filter(
+                job__posted_by_employer=self.request.user.employer_profile
+            ).select_related('job', 'user')
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='employer/job/(?P<job_id>[^/.]+)/applicants')
+    def employer_applicants(self, request, job_id=None):
+        if not hasattr(request.user, 'employer_profile'):
+            return Response({'detail': 'Employer account required.'}, status=status.HTTP_403_FORBIDDEN)
+
+        applications = Application.objects.filter(
+            job_id=job_id,
+            job__posted_by_employer=request.user.employer_profile,
+        ).select_related('job', 'user', 'user__profile')
+        payload = []
+        for item in applications:
+            profile = getattr(item.user, 'profile', None)
+            payload.append(
+                {
+                    'application_id': item.id,
+                    'status': item.status,
+                    'applied_at': item.created_at,
+                    'job': {'id': item.job.id, 'title': item.job.title},
+                    'applicant': {
+                        'id': item.user.id,
+                        'username': item.user.username,
+                        'email': item.user.email,
+                        'full_name': profile.full_name if profile else '',
+                        'skills': profile.skills if profile else [],
+                        'job_interests': profile.job_interests if profile else [],
+                        'experience': profile.experience if profile else '',
+                        'profile_picture_url': profile.profile_picture_url if profile else '',
+                    },
+                }
+            )
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class UserProfileViewSet(viewsets.ModelViewSet):
+    serializer_class = UserProfileSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return UserProfile.objects.filter(user=self.request.user)
+
+    def list(self, request, *args, **kwargs):
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        return Response(self.get_serializer(profile).data, status=status.HTTP_200_OK)
+
+    def partial_update(self, request, *args, **kwargs):
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        serializer = self.get_serializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['patch'], permission_classes=[IsAuthenticated], url_path='me')
+    def me(self, request):
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        serializer = self.get_serializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated], url_path='onboarding')
+    def onboarding(self, request):
+        serializer = OnboardingSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        profile.job_interests = serializer.validated_data['job_interests']
+        profile.skills = serializer.validated_data['skills']
+        profile.onboarding_completed = True
+        profile.save(update_fields=['job_interests', 'skills', 'onboarding_completed', 'updated_at'])
+        return Response(self.get_serializer(profile).data, status=status.HTTP_200_OK)
 
 
 class ResumeViewSet(viewsets.ModelViewSet):
