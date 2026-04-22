@@ -8,20 +8,22 @@ const OnboardingPage = () => {
   const navigate = useNavigate();
   const { setOnboardingCompleted } = useAuth();
   const [step, setStep] = useState(1);
-  const [jobInterests, setJobInterests] = useState('');
-  const [skills, setSkills] = useState('');
+  const [jobPreferences, setJobPreferences] = useState([]);
+  const [skills, setSkills] = useState([]);
+  const [skillInput, setSkillInput] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const toArray = (value) => value.split(',').map((item) => item.trim()).filter(Boolean);
+  const jobOptions = ['Construction', 'Accountant', 'IT', 'Healthcare', 'Marketing', 'Sales'];
+  const skillOptions = ['Python', 'JavaScript', 'Communication', 'C++', 'Project Management', 'SQL'];
 
   const submitOnboarding = async () => {
     setLoading(true);
     setError('');
     try {
       const payload = {
-        job_interests: toArray(jobInterests),
-        skills: toArray(skills),
+        jobPreferences,
+        skills,
       };
       await api.post('/user/profile/onboarding/', payload);
       localStorage.setItem('onboardingCompleted', '1');
@@ -41,28 +43,59 @@ const OnboardingPage = () => {
         <p className="muted">Step {step} of 2</p>
         {step === 1 ? (
           <>
-            <label>Job interests (comma separated)</label>
-            <input
-              placeholder="Construction, Accountant, IT"
-              value={jobInterests}
-              onChange={(e) => setJobInterests(e.target.value)}
-            />
-            <button type="button" className="btn" onClick={() => setStep(2)} disabled={!jobInterests.trim()}>
+            <label>Select work/job interests</label>
+            <div className="actions">
+              {jobOptions.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className={jobPreferences.includes(option) ? 'btn' : 'btn-alt'}
+                  onClick={() => setJobPreferences((prev) => (prev.includes(option) ? prev.filter((item) => item !== option) : [...prev, option]))}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+            <button type="button" className="btn" onClick={() => setStep(2)} disabled={!jobPreferences.length}>
               Continue
             </button>
           </>
         ) : (
           <>
-            <label>Skills (comma separated)</label>
+            <label>Select or add your skills</label>
+            <div className="actions">
+              {skillOptions.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className={skills.includes(option) ? 'btn' : 'btn-alt'}
+                  onClick={() => setSkills((prev) => (prev.includes(option) ? prev.filter((item) => item !== option) : [...prev, option]))}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
             <input
-              placeholder="Python, JavaScript, Communication"
-              value={skills}
-              onChange={(e) => setSkills(e.target.value)}
+              placeholder="Type a skill and press Add"
+              value={skillInput}
+              onChange={(e) => setSkillInput(e.target.value)}
             />
+            <button
+              type="button"
+              className="btn-alt"
+              onClick={() => {
+                const newSkill = skillInput.trim();
+                if (!newSkill) return;
+                setSkills((prev) => (prev.includes(newSkill) ? prev : [...prev, newSkill]));
+                setSkillInput('');
+              }}
+            >
+              Add Skill
+            </button>
             {error && <p className="error">{error}</p>}
             <div className="actions">
               <button type="button" className="btn-alt" onClick={() => setStep(1)}>Back</button>
-              <button type="button" className="btn" onClick={submitOnboarding} disabled={loading || !skills.trim()}>
+              <button type="button" className="btn" onClick={submitOnboarding} disabled={loading || !skills.length}>
                 {loading ? 'Saving...' : 'Finish Setup'}
               </button>
             </div>

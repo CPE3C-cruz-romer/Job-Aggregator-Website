@@ -95,7 +95,7 @@ class UserProfile(models.Model):
     job_interests = models.JSONField(default=list, blank=True)
     skills = models.JSONField(default=list, blank=True)
     experience = models.TextField(blank=True)
-    profile_picture_url = models.URLField(blank=True)
+    profile_picture = models.ImageField(upload_to='profile-pictures/', blank=True, null=True)
     onboarding_completed = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -7,7 +7,7 @@ import { parseApiError } from '../utils/error';
 const RegisterPage = () => {
   const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ username: '', email: '', password: '' });
+  const [form, setForm] = useState({ username: '', email: '', password: '', full_name: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -44,6 +44,7 @@ const RegisterPage = () => {
         <h2>Create Account</h2>
         <p className="muted">Use 8+ characters and avoid common or numeric-only passwords.</p>
         <input placeholder="Username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+        <input placeholder="Full name" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
         <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
         <input placeholder="Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
         {error && <p className="error" role="alert">Please fix: {error}</p>}

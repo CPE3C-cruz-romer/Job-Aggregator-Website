@@ -37,7 +37,7 @@ const Navbar = () => {
             </>
           ) : (
             <button className="btn" onClick={() => { logout(); closeMenu(); }}>
-              Logout ({user.username}{isEmployer ? ' / employer' : ''})
+              Logout ({user.name || user.username}{isEmployer ? ' / employer' : ''})
             </button>
           )}
         </div>

@@ -3,6 +3,7 @@ import re
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.db import IntegrityError
 from django.db.models import Q
 from google.auth.transport import requests as google_requests
@@ -43,7 +44,12 @@ def _token_response(user):
     profile, _ = UserProfile.objects.get_or_create(user=user)
     refresh = RefreshToken.for_user(user)
     return {
-        'user': {'id': user.id, 'username': user.username, 'email': user.email},
+        'user': {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'name': profile.full_name or user.first_name or user.username,
+        },
         'access': str(refresh.access_token),
         'refresh': str(refresh),
         'is_employer': hasattr(user, 'employer_profile'),
@@ -246,6 +252,53 @@ class JobViewSet(viewsets.ModelViewSet):
         return queryset
 
     @staticmethod
+    def _normalize_terms(items):
+        return [str(item).strip().lower() for item in items if str(item).strip()]
+
+    @classmethod
+    def _expand_interest_terms(cls, interests):
+        mapping = {
+            'it': ['software', 'developer', 'engineering', 'technology', 'devops', 'data'],
+            'construction': ['construction', 'civil', 'site', 'foreman', 'electrician', 'plumber'],
+            'accountant': ['accountant', 'accounting', 'finance', 'bookkeeper', 'auditor'],
+            'healthcare': ['nurse', 'medical', 'health', 'clinic', 'hospital'],
+            'marketing': ['marketing', 'seo', 'brand', 'content', 'digital marketing'],
+            'sales': ['sales', 'account executive', 'business development'],
+        }
+        expanded = set(cls._normalize_terms(interests))
+        for item in list(expanded):
+            expanded.update(mapping.get(item, []))
+        return expanded
+
+    @classmethod
+    def _rank_jobs(cls, jobs, interests, skills):
+        interest_terms = cls._expand_interest_terms(interests)
+        skill_terms = set(cls._normalize_terms(skills))
+        ranked_jobs = []
+        for job in jobs:
+            required = {str(item).strip().lower() for item in (job.required_skills or []) if str(item).strip()}
+            title_tokens = f"{job.title or ''} {job.category or ''}".lower()
+            preference_match = 1 if any(term in title_tokens for term in interest_terms) else 0
+            skill_matches = len(required.intersection(skill_terms))
+            score = (skill_matches * 20) + (preference_match * 10)
+            if job.is_direct_employer:
+                score += 10_000
+            job.match_score = score
+            job.matching_skills_count = skill_matches
+            ranked_jobs.append(job)
+
+        ranked_jobs.sort(
+            key=lambda item: (
+                1 if item.is_direct_employer else 0,
+                item.matching_skills_count,
+                1 if any(term in f"{item.title or ''} {item.category or ''}".lower() for term in interest_terms) else 0,
+                item.created_at.timestamp(),
+            ),
+            reverse=True,
+        )
+        return ranked_jobs
+
+    @staticmethod
     def _pick_param(request, *names, default=''):
         for name in names:
             value = request.GET.get(name)
@@ -317,42 +370,36 @@ class JobViewSet(viewsets.ModelViewSet):
         if profile and not skills:
             skills = profile.skills or []
 
-        normalized_interests = [item.strip().lower() for item in interests if str(item).strip()]
-        normalized_skills = [item.strip().lower() for item in skills if str(item).strip()]
+        normalized_interests = self._normalize_terms(interests)
+        normalized_skills = self._normalize_terms(skills)
+        page = max(1, self._safe_int(request.query_params.get('page'), 1))
+        limit = min(25, max(1, self._safe_int(request.query_params.get('limit'), 10)))
 
-        jobs = Job.objects.select_related('posted_by_employer').all()
-        ranked_jobs = []
-        for job in jobs:
-            required = [str(item).strip().lower() for item in (job.required_skills or []) if str(item).strip()]
-            category_match = 1 if normalized_interests and (job.category or '').strip().lower() in normalized_interests else 0
-            skill_matches = len(set(required).intersection(normalized_skills))
-            score = (5 * category_match) + (2 * skill_matches)
-            if job.is_direct_employer:
-                score += 1000
-            ranked_jobs.append((job, score, skill_matches))
-
-        ranked_jobs.sort(
-            key=lambda item: (
-                1 if item[0].is_direct_employer else 0,
-                item[1],
-                item[2],
-                item[0].created_at.timestamp(),
-            ),
-            reverse=True,
-        )
-
-        ordered = []
-        for job, score, skill_matches in ranked_jobs:
-            job.match_score = score
-            job.matching_skills_count = skill_matches
-            ordered.append(job)
+        cache_key = f"jobs_match:{request.user.id}:{','.join(sorted(normalized_interests))}:{','.join(sorted(normalized_skills))}"
+        ranked_ids = cache.get(cache_key)
+        if ranked_ids is None:
+            jobs = Job.objects.select_related('posted_by_employer').all()
+            ranked_jobs = self._rank_jobs(jobs, normalized_interests, normalized_skills)
+            ranked_ids = [job.id for job in ranked_jobs]
+            cache.set(cache_key, ranked_ids, timeout=300)
+        all_jobs = list(Job.objects.filter(id__in=ranked_ids).select_related('posted_by_employer'))
+        jobs_map = {job.id: job for job in all_jobs}
+        ordered = [jobs_map[job_id] for job_id in ranked_ids if job_id in jobs_map]
+        ordered = self._rank_jobs(ordered, normalized_interests, normalized_skills)
+        total = len(ordered)
+        start = (page - 1) * limit
+        end = start + limit
+        paginated = ordered[start:end]
 
         return Response(
             {
                 'interests': normalized_interests,
                 'skills': normalized_skills,
-                'count': len(ordered),
-                'results': JobSerializer(ordered, many=True).data,
+                'count': total,
+                'page': page,
+                'limit': limit,
+                'has_more': end < total,
+                'results': JobSerializer(paginated, many=True).data,
             },
             status=status.HTTP_200_OK,
         )
@@ -495,7 +542,11 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                         'skills': profile.skills if profile else [],
                         'job_interests': profile.job_interests if profile else [],
                         'experience': profile.experience if profile else '',
-                        'profile_picture_url': profile.profile_picture_url if profile else '',
+                        'profile_picture_url': (
+                            request.build_absolute_uri(profile.profile_picture.url)
+                            if profile and profile.profile_picture
+                            else ''
+                        ),
                     },
                 }
             )
@@ -509,13 +560,26 @@ class UserProfileViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return UserProfile.objects.filter(user=self.request.user)
 
+    @staticmethod
+    def _normalized_profile_payload(request):
+        payload = request.data.copy()
+        if hasattr(payload, 'getlist'):
+            for field in ('skills', 'job_interests'):
+                values = [item.strip() for item in payload.getlist(field) if str(item).strip()]
+                if values:
+                    payload.setlist(field, values)
+        return payload
+
     def list(self, request, *args, **kwargs):
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        if not profile.full_name and request.user.first_name:
+            profile.full_name = request.user.first_name
+            profile.save(update_fields=['full_name', 'updated_at'])
         return Response(self.get_serializer(profile).data, status=status.HTTP_200_OK)
 
     def partial_update(self, request, *args, **kwargs):
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
-        serializer = self.get_serializer(profile, data=request.data, partial=True)
+        serializer = self.get_serializer(profile, data=self._normalized_profile_payload(request), partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -523,7 +587,7 @@ class UserProfileViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['patch'], permission_classes=[IsAuthenticated], url_path='me')
     def me(self, request):
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
-        serializer = self.get_serializer(profile, data=request.data, partial=True)
+        serializer = self.get_serializer(profile, data=self._normalized_profile_payload(request), partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)

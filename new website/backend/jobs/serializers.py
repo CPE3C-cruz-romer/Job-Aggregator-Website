@@ -7,22 +7,27 @@ from .models import EmployerProfile, Job, SavedJob, Application, Resume, UserPro
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
+    full_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'password')
+        fields = ('id', 'username', 'email', 'password', 'full_name')
 
     def validate_password(self, value):
         validate_password(value)
         return value
 
     def create(self, validated_data):
+        full_name = (validated_data.pop('full_name', '') or '').strip()
         user = User(
             username=validated_data['username'],
             email=validated_data.get('email', ''),
         )
+        if full_name:
+            user.first_name = full_name[:150]
         user.set_password(validated_data['password'])
         user.save()
+        UserProfile.objects.create(user=user, full_name=full_name or user.first_name)
         return user
 
 
@@ -104,6 +109,9 @@ class ResumeSerializer(serializers.ModelSerializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
+    name = serializers.SerializerMethodField(read_only=True)
+    profile_picture_url = serializers.SerializerMethodField(read_only=True)
+    jobPreferences = serializers.ListField(source='job_interests', child=serializers.CharField(max_length=120), required=False)
 
     class Meta:
         model = UserProfile
@@ -111,17 +119,40 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'id',
             'username',
             'email',
+            'name',
             'full_name',
+            'jobPreferences',
             'job_interests',
             'skills',
             'experience',
+            'profile_picture',
             'profile_picture_url',
             'onboarding_completed',
             'updated_at',
         )
         read_only_fields = ('updated_at',)
 
+    def get_name(self, obj):
+        return obj.full_name or obj.user.first_name or obj.user.username
+
+    def get_profile_picture_url(self, obj):
+        if obj.profile_picture:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            return obj.profile_picture.url
+        return ''
+
 
 class OnboardingSerializer(serializers.Serializer):
-    job_interests = serializers.ListField(child=serializers.CharField(max_length=120), allow_empty=False)
+    job_interests = serializers.ListField(child=serializers.CharField(max_length=120), allow_empty=False, required=False)
+    jobPreferences = serializers.ListField(child=serializers.CharField(max_length=120), allow_empty=False, required=False)
     skills = serializers.ListField(child=serializers.CharField(max_length=120), allow_empty=False)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        interests = attrs.get('job_interests') or attrs.get('jobPreferences')
+        if not interests:
+            raise serializers.ValidationError({'jobPreferences': 'Select at least one job preference.'})
+        attrs['job_interests'] = interests
+        return attrs

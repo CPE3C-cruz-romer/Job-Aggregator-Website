@@ -13,6 +13,8 @@ const JobsPage = () => {
   const [message, setMessage] = useState('');
   const [filters, setFilters] = useState({ title: '', location: '', company: '' });
   const [recommended, setRecommended] = useState([]);
+  const [recommendedPage, setRecommendedPage] = useState(1);
+  const [recommendedHasMore, setRecommendedHasMore] = useState(false);
 
   const loadJobs = async (searchQuery = '') => {
     setLoading(true);
@@ -34,8 +36,10 @@ const JobsPage = () => {
       const token = localStorage.getItem('accessToken');
       if (!token) return;
       try {
-        const { data } = await api.get('/jobs/match/');
+        const { data } = await api.get('/jobs/match/?limit=10&page=1');
         setRecommended(data.results || []);
+        setRecommendedHasMore(Boolean(data.has_more));
+        setRecommendedPage(1);
       } catch {
         setRecommended([]);
       }
@@ -61,6 +65,18 @@ const JobsPage = () => {
         return;
       }
       setMessage(parseApiError(error, 'Failed to save job.'));
+    }
+  };
+
+  const loadMoreRecommended = async () => {
+    const nextPage = recommendedPage + 1;
+    try {
+      const { data } = await api.get(`/jobs/match/?limit=10&page=${nextPage}`);
+      setRecommended((prev) => [...prev, ...(data.results || [])]);
+      setRecommendedHasMore(Boolean(data.has_more));
+      setRecommendedPage(nextPage);
+    } catch {
+      setRecommendedHasMore(false);
     }
   };
 
@@ -128,8 +144,11 @@ const JobsPage = () => {
           <h3>Recommended Jobs for You</h3>
           <p className="muted">Direct employer jobs are always ranked first, then jobs with strongest skill match.</p>
           <div className="grid">
-            {recommended.slice(0, 6).map((job) => <JobCard key={`recommended-${job.id}`} job={job} onSave={saveJob} onApply={applyJob} />)}
+            {recommended.map((job) => <JobCard key={`recommended-${job.id}`} job={job} onSave={saveJob} onApply={applyJob} />)}
           </div>
+          {recommendedHasMore && (
+            <button type="button" className="btn-alt" onClick={loadMoreRecommended}>Load More Matches</button>
+          )}
         </section>
       )}
       {loading ? <p>Loading jobs...</p> : (
