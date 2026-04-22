@@ -17,6 +17,7 @@ const JobsPage = () => {
   const [recommended, setRecommended] = useState([]);
   const [recommendedPage, setRecommendedPage] = useState(1);
   const [recommendedHasMore, setRecommendedHasMore] = useState(false);
+  const [preferredSearch, setPreferredSearch] = useState('');
 
   const loadJobs = async ({ searchQuery = '', nextSkip = 0, append = false } = {}) => {
     setLoading(true);
@@ -45,6 +46,7 @@ const JobsPage = () => {
         const { data } = await api.get('/user/profile/');
         localStorage.setItem('userProfile', JSON.stringify(data));
         const derivedQuery = (data.job_interests || []).join(' ');
+        setPreferredSearch(derivedQuery.trim());
         await loadJobs({ searchQuery: derivedQuery });
       } catch {
         const profileRaw = localStorage.getItem('userProfile');
@@ -55,6 +57,7 @@ const JobsPage = () => {
         try {
           const profile = JSON.parse(profileRaw);
           const derivedQuery = (profile.job_interests || []).join(' ');
+          setPreferredSearch(derivedQuery.trim());
           loadJobs({ searchQuery: derivedQuery });
         } catch {
           loadJobs();
@@ -136,7 +139,7 @@ const JobsPage = () => {
   const refreshFromApi = async () => {
     setLoading(true);
     try {
-      const searchTerm = filters.title.trim() || 'developer';
+      const searchTerm = filters.title.trim() || preferredSearch || 'software engineer';
       const location = filters.location.trim() || 'united states';
       const params = new URLSearchParams({
         search: searchTerm,

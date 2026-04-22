@@ -605,15 +605,38 @@ class UserProfileViewSet(viewsets.ModelViewSet):
     @staticmethod
     def _normalized_profile_payload(request):
         payload = request.data.copy()
-        picture = payload.get('profilePicture')
-        if picture and not payload.get('profile_picture'):
-            payload['profile_picture'] = picture
-        if hasattr(payload, 'getlist'):
-            for field in ('skills', 'job_interests'):
-                values = [item.strip() for item in payload.getlist(field) if str(item).strip()]
-                if values:
-                    payload.setlist(field, values)
-        return payload
+        normalized = {}
+
+        def _extract_list(*field_names):
+            values = []
+            if hasattr(payload, 'getlist'):
+                for field_name in field_names:
+                    values.extend(payload.getlist(field_name))
+            for field_name in field_names:
+                single = payload.get(field_name)
+                if isinstance(single, str):
+                    values.extend(re.split(r'[,|\n]+', single))
+                elif isinstance(single, list):
+                    values.extend(single)
+            return [str(item).strip() for item in values if str(item).strip()]
+
+        for text_field in ('full_name', 'experience'):
+            raw_value = payload.get(text_field)
+            if raw_value is not None:
+                normalized[text_field] = str(raw_value).strip()
+
+        skills = _extract_list('skills')
+        if skills:
+            normalized['skills'] = skills
+
+        interests = _extract_list('job_interests', 'jobPreferences')
+        if interests:
+            normalized['job_interests'] = interests
+
+        picture = request.FILES.get('profile_picture') or request.FILES.get('profilePicture')
+        if picture:
+            normalized['profile_picture'] = picture
+        return normalized
 
     def list(self, request, *args, **kwargs):
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
