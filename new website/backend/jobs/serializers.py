@@ -24,6 +24,13 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         single_preference = self.initial_data.get('jobPreference')
         if isinstance(single_preference, str) and single_preference.strip():
             job_preferences = [single_preference.strip()]
+        cleaned_preferences = []
+        for item in job_preferences:
+            normalized = str(item).strip().lower()
+            if normalized and normalized not in cleaned_preferences:
+                cleaned_preferences.append(normalized)
+        if len(cleaned_preferences) > 3:
+            raise serializers.ValidationError({'jobPreferences': 'Select up to 3 job preferences only.'})
         user = User(
             username=validated_data['username'],
             email=validated_data.get('email', ''),
@@ -35,7 +42,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         UserProfile.objects.create(
             user=user,
             full_name=full_name or user.first_name,
-            job_interests=[item.strip().lower() for item in job_preferences if str(item).strip()],
+            job_interests=cleaned_preferences,
         )
         return user
 

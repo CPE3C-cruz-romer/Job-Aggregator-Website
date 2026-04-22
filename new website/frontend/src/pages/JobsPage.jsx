@@ -6,6 +6,37 @@ import FilterBar from '../components/FilterBar';
 import { parseApiError } from '../utils/error';
 import { getNormalizedJobUrl, hasExternalJobUrl } from '../utils/job';
 
+
+const INTEREST_KEYWORD_MAP = {
+  it: ['software engineer', 'backend developer', 'data analyst'],
+  engineering: ['software engineer', 'devops engineer', 'qa engineer'],
+  construction: ['construction manager', 'site engineer', 'foreman'],
+  accountant: ['accountant', 'bookkeeper', 'financial analyst'],
+  healthcare: ['registered nurse', 'medical assistant', 'healthcare coordinator'],
+  marketing: ['digital marketing specialist', 'seo specialist', 'content strategist'],
+  sales: ['sales representative', 'account executive', 'business development'],
+};
+
+const buildKeywordQuery = (profile = {}) => {
+  const keywords = [];
+  const push = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized && !keywords.includes(normalized)) keywords.push(normalized);
+  };
+
+  (profile.job_interests || []).forEach((interest) => {
+    push(interest);
+    (INTEREST_KEYWORD_MAP[String(interest).toLowerCase()] || []).forEach(push);
+  });
+  (profile.skills || []).forEach(push);
+
+  ['software engineer', 'project coordinator', 'operations specialist'].forEach((fallback) => {
+    if (keywords.length < 3) push(fallback);
+  });
+
+  return keywords.slice(0, Math.max(3, keywords.length)).join(' ');
+};
+
 const JobsPage = () => {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState([]);
@@ -46,7 +77,7 @@ const JobsPage = () => {
       try {
         const { data } = await api.get('/user/profile/');
         localStorage.setItem('userProfile', JSON.stringify(data));
-        const derivedQuery = (data.job_interests || []).join(' ');
+        const derivedQuery = buildKeywordQuery(data);
         setPreferredSearch(derivedQuery.trim());
         await loadJobs({ searchQuery: derivedQuery });
       } catch {
@@ -57,7 +88,7 @@ const JobsPage = () => {
         }
         try {
           const profile = JSON.parse(profileRaw);
-          const derivedQuery = (profile.job_interests || []).join(' ');
+          const derivedQuery = buildKeywordQuery(profile);
           setPreferredSearch(derivedQuery.trim());
           loadJobs({ searchQuery: derivedQuery });
         } catch {
@@ -214,6 +245,7 @@ const JobsPage = () => {
               <JobCard key={job.id} job={job} onSave={saveJob} onApply={applyJob} animationIndex={index} />
             ))}
           </div>
+          {!jobs.length && <p className="muted">No jobs found yet. Try Refresh from API or adjust filters.</p>}
           {hasMoreJobs && (
             <button type="button" className="btn-alt" onClick={() => loadJobs({ nextSkip: skip, append: true })}>
               Load More Jobs

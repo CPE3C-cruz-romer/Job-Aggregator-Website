@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import GoogleSignInButton from '../components/GoogleSignInButton';
@@ -11,7 +11,23 @@ const RegisterPage = () => {
   const [step, setStep] = useState(1);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const preferenceOptions = ['construction', 'accountant', 'engineering', 'it', 'healthcare', 'marketing'];
+  const preferenceOptions = useMemo(() => [
+    ...new Set(['construction', 'accountant', 'engineering', 'it', 'healthcare', 'marketing', 'sales']),
+  ], []);
+
+  const togglePreference = (option) => {
+    setForm((prev) => {
+      const alreadySelected = prev.jobPreferences.includes(option);
+      if (alreadySelected) {
+        return { ...prev, jobPreferences: prev.jobPreferences.filter((item) => item !== option) };
+      }
+      if (prev.jobPreferences.length >= 3) {
+        setError('You can select up to 3 job types only.');
+        return prev;
+      }
+      return { ...prev, jobPreferences: [...prev.jobPreferences, option] };
+    });
+  };
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -57,19 +73,20 @@ const RegisterPage = () => {
           </>
         ) : (
           <>
-            <label>Select preferred work type</label>
+            <label>Select preferred work type (max 3)</label>
             <div className="actions">
               {preferenceOptions.map((option) => (
                 <button
                   key={option}
                   type="button"
-                  className={form.jobPreferences[0] === option ? 'btn' : 'btn-alt'}
-                  onClick={() => setForm((prev) => ({ ...prev, jobPreferences: [option] }))}
+                  className={form.jobPreferences.includes(option) ? 'btn' : 'btn-alt'}
+                  onClick={() => togglePreference(option)}
                 >
                   {option}
                 </button>
               ))}
             </div>
+            <p className="muted">Selected: {form.jobPreferences.length}/3</p>
             {error && <p className="error" role="alert">Please fix: {error}</p>}
             <div className="actions">
               <button type="button" className="btn-alt" onClick={() => setStep(1)}>Back</button>

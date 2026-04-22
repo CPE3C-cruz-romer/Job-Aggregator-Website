@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import GoogleSignInButton from '../components/GoogleSignInButton';
 import { parseApiError } from '../utils/error';
 
 const EmployerRegisterPage = () => {
-  const { registerEmployer, loginWithGoogle, logout } = useAuth();
+  const { registerEmployer } = useAuth();
   const navigate = useNavigate();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,24 +29,6 @@ const EmployerRegisterPage = () => {
     }
   };
 
-  const onGoogleCredential = async (credential) => {
-    setError('');
-    setLoading(true);
-    try {
-      const data = await loginWithGoogle(credential);
-      if (!data?.is_employer) {
-        logout();
-        setError('Google sign-in is enabled, but this account is not yet an employer. Complete employer registration form first.');
-        return;
-      }
-      navigate('/employer/workspace');
-    } catch (err) {
-      setError(parseApiError(err, 'Employer Google login failed.'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <section className="auth-wrap">
       <form className="auth-card" onSubmit={onSubmit}>
@@ -61,9 +42,7 @@ const EmployerRegisterPage = () => {
         <input placeholder="Password" type="password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
         {error && <p className="error" role="alert">{error}</p>}
         <button className="btn" type="submit" disabled={loading}>{loading ? 'Registering...' : 'Register Employer'}</button>
-        <div className="google-wrap">
-          <GoogleSignInButton onCredential={onGoogleCredential} onError={(msg) => setError(msg)} />
-        </div>
+        <p className="muted">Employer accounts must be created with this form first. After registration, use employer login.</p>
         <p>Already an employer? <Link to="/employer/login">Login here</Link></p>
       </form>
     </section>

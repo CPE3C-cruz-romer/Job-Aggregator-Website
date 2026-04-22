@@ -297,19 +297,50 @@ class JobViewSet(viewsets.ModelViewSet):
         return cls._normalize_terms(terms)
 
     @classmethod
-    def _expand_interest_terms(cls, interests):
-        mapping = {
-            'it': ['software', 'developer', 'engineering', 'technology', 'devops', 'data'],
-            'construction': ['construction', 'civil', 'site', 'foreman', 'electrician', 'plumber'],
-            'accountant': ['accountant', 'accounting', 'finance', 'bookkeeper', 'auditor'],
-            'healthcare': ['nurse', 'medical', 'health', 'clinic', 'hospital'],
-            'marketing': ['marketing', 'seo', 'brand', 'content', 'digital marketing'],
-            'sales': ['sales', 'account executive', 'business development'],
+    def _interest_mapping(cls):
+        return {
+            'it': ['software engineer', 'backend developer', 'data analyst'],
+            'engineering': ['software engineer', 'devops engineer', 'qa engineer'],
+            'construction': ['construction manager', 'site engineer', 'foreman'],
+            'accountant': ['accountant', 'bookkeeper', 'financial analyst'],
+            'healthcare': ['registered nurse', 'medical assistant', 'healthcare coordinator'],
+            'marketing': ['digital marketing specialist', 'seo specialist', 'content strategist'],
+            'sales': ['sales representative', 'account executive', 'business development'],
         }
+
+    @classmethod
+    def _expand_interest_terms(cls, interests):
+        mapping = cls._interest_mapping()
         expanded = set(cls._normalize_terms(interests))
         for item in list(expanded):
             expanded.update(mapping.get(item, []))
         return expanded
+
+    @classmethod
+    def _build_personalized_keywords(cls, interests, skills, minimum=3):
+        mapping = cls._interest_mapping()
+        keywords = []
+
+        def _push(value):
+            normalized = str(value).strip().lower()
+            if normalized and normalized not in keywords:
+                keywords.append(normalized)
+
+        for interest in cls._normalize_terms(interests):
+            _push(interest)
+            for related in mapping.get(interest, []):
+                _push(related)
+
+        for skill in cls._normalize_terms(skills):
+            _push(skill)
+
+        fallback = ['software engineer', 'project coordinator', 'operations specialist']
+        for item in fallback:
+            if len(keywords) >= minimum:
+                break
+            _push(item)
+
+        return keywords[: max(minimum, len(keywords))]
 
     @classmethod
     def _rank_jobs(cls, jobs, interests, skills):
@@ -413,6 +444,7 @@ class JobViewSet(viewsets.ModelViewSet):
 
         normalized_interests = self._normalize_terms(interests)
         normalized_skills = self._normalize_terms(skills)
+        query_keywords = self._build_personalized_keywords(normalized_interests, normalized_skills, minimum=3)
         page = max(1, self._safe_int(request.query_params.get('page'), 1))
         limit = min(25, max(1, self._safe_int(request.query_params.get('limit'), 10)))
 
@@ -421,6 +453,11 @@ class JobViewSet(viewsets.ModelViewSet):
         ranked_ids = cache.get(cache_key)
         if ranked_ids is None:
             jobs = Job.objects.select_related('posted_by_employer').all()
+            if query_keywords:
+                query_filter = Q()
+                for term in query_keywords:
+                    query_filter |= Q(title__icontains=term) | Q(category__icontains=term) | Q(description__icontains=term)
+                jobs = jobs.filter(query_filter).distinct()
             ranked_jobs = self._rank_jobs(jobs, normalized_interests, normalized_skills)
             ranked_ids = [job.id for job in ranked_jobs]
             cache.set(cache_key, ranked_ids, timeout=300)
@@ -437,6 +474,7 @@ class JobViewSet(viewsets.ModelViewSet):
             {
                 'interests': normalized_interests,
                 'skills': normalized_skills,
+                'query_keywords': query_keywords,
                 'count': total,
                 'page': page,
                 'limit': limit,

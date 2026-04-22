@@ -47,6 +47,8 @@ const GoogleSignInButton = ({ onCredential, onError }) => {
             client_id: clientId,
             callback: (resp) => credentialRef.current?.(resp.credential),
             ux_mode: 'popup',
+            auto_select: false,
+            cancel_on_tap_outside: true,
           });
           initializedClientRef.current = clientId;
           window.__googleClientInitializedId = clientId;
