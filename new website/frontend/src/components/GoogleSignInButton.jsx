@@ -94,6 +94,7 @@ const GoogleSignInButton = ({ onCredential, onError }) => {
       cancelled = true;
       credentialListeners.delete(listener);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     // GIS should initialize once per page lifecycle.
   }, [clientId]);
 
