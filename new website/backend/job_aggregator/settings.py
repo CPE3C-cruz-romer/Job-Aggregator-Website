@@ -124,10 +124,16 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOWED_ORIGINS = _env_csv(
     'CORS_ALLOWED_ORIGINS',
-    'http://localhost:3000,http://127.0.0.1:3000,https://www.cpe3cjobaggregator.com,https://cpe3cjobaggregator.com',
+    (
+        'http://localhost:3000,'
+        'http://127.0.0.1:3000,'
+        'https://www.cpe3cjobaggregator.com,'
+        'https://cpe3cjobaggregator.com,'
+        'https://job-aggregator-website.onrender.com'
+    ),
 )
 CORS_ALLOWED_ORIGIN_REGEXES = [
-    r"^https://.*\.vercel\.app$",
+    r"^https://([a-z0-9-]+\.)*vercel\.app$",
 ]
 CORS_ALLOW_CREDENTIALS = True
 

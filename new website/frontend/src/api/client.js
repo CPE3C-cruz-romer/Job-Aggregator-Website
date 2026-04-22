@@ -7,7 +7,14 @@ const rawBaseUrl =
   process.env.REACT_APP_API_BASE_URL ||
   DEFAULT_API_URL;
 
-const normalizedBaseUrl = rawBaseUrl.replace(/\/+$/, '');
+const ensureApiPath = (url) => {
+  const trimmed = String(url || '').trim().replace(/\/+$/, '');
+  if (!trimmed) return DEFAULT_API_URL.replace(/\/+$/, '');
+  if (/\/api$/i.test(trimmed)) return trimmed;
+  return `${trimmed}/api`;
+};
+
+const normalizedBaseUrl = ensureApiPath(rawBaseUrl);
 
 const getAccessToken = () => (
   localStorage.getItem('accessToken')
