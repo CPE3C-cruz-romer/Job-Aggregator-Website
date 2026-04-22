@@ -780,10 +780,19 @@ class ResumeViewSet(viewsets.ModelViewSet):
     serializer_class = ResumeSerializer
     permission_classes = [IsAuthenticated]
 
+    @staticmethod
+    def _ensure_resume_schema_ready():
+        try:
+            ensure_db_ready()
+        except Exception as exc:
+            raise APIException(f'Database initialization failed: {str(exc)}') from exc
+
     def get_queryset(self):
+        self._ensure_resume_schema_ready()
         return Resume.objects.filter(user=self.request.user)
 
     def create(self, request, *args, **kwargs):
+        self._ensure_resume_schema_ready()
         resume, _ = Resume.objects.get_or_create(user=request.user)
 
         uploaded_file = request.FILES.get('file') or request.FILES.get('resume')
@@ -877,6 +886,7 @@ class ResumeViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def recommendations(self, request):
+        self._ensure_resume_schema_ready()
         resume = Resume.objects.filter(user=request.user).first()
         if not resume:
             return Response({'error': 'No resume found. Upload a resume first.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -905,6 +915,7 @@ class ResumeViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def skill_match(self, request):
+        self._ensure_resume_schema_ready()
         resume = Resume.objects.filter(user=request.user).first()
         if not resume or not has_meaningful_resume_text(resume.extracted_text):
             return Response(
