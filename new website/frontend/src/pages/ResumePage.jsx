@@ -12,8 +12,6 @@ const ResumePage = () => {
   const [jobId, setJobId] = useState('');
   const [match, setMatch] = useState(null);
   const [recommendations, setRecommendations] = useState(null);
-  const [autoJobs, setAutoJobs] = useState([]);
-  const [selectedSkills, setSelectedSkills] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [streaming, setStreaming] = useState(false);
@@ -29,27 +27,9 @@ const ResumePage = () => {
     setRecommendations(data);
   };
 
-  const pickRandomSkills = (skills, count = 3) => {
-    if (!Array.isArray(skills) || skills.length === 0) return [];
-    const shuffled = [...skills].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, Math.min(count, shuffled.length));
-  };
-
-  const fetchJobsForSelectedSkills = async (selectedSkills) => {
-    if (!selectedSkills || selectedSkills.length === 0) {
-      setAutoJobs([]);
-      return;
-    }
-    const skillsQuery = encodeURIComponent(selectedSkills.join(','));
-    const { data } = await api.get(`/jobs/?skills=${skillsQuery}&randomize=1&t=${Date.now()}`);
-    setAutoJobs(Array.isArray(data) ? data : []);
-  };
-
   const resetSkillMatchingState = ({ keepInfo = false } = {}) => {
     setMatch(null);
     setRecommendations(null);
-    setAutoJobs([]);
-    setSelectedSkills([]);
     setError('');
     if (!keepInfo) setInfo('');
   };
@@ -76,25 +56,13 @@ const ResumePage = () => {
       const { data } = await api.post('/resume/', form);
       setInfo(`Resume uploaded at ${new Date(data.uploaded_at).toLocaleString()}`);
       if (data.ocr_warning) setInfo((prev) => `${prev} • ${data.ocr_warning}`);
-      if (data.recommendations) {
-        setRecommendations(data.recommendations);
-      } else {
+
+      try {
         await fetchRecommendations();
+      } catch (recommendationError) {
+        setRecommendations(null);
+        setError(parseApiError(recommendationError, 'Resume uploaded, but recommendations failed to load.'));
       }
-
-      const skillsFromResume = data?.extracted_skills || data?.recommendations?.extracted_skills || [];
-      if (!Array.isArray(skillsFromResume) || skillsFromResume.length === 0) {
-        throw new Error('No skills extracted from resume.');
-      }
-
-      const randomSkills = Array.isArray(data?.selected_skills) && data.selected_skills.length > 0
-        ? data.selected_skills
-        : pickRandomSkills(skillsFromResume, 3);
-      setSelectedSkills(randomSkills);
-      await fetchJobsForSelectedSkills(randomSkills);
-
-      const matchedSkills = randomSkills;
-      window.dispatchEvent(new CustomEvent('jobs:refresh-requested', { detail: { matchedSkills } }));
     } catch (err) {
       setError(parseApiError(err, 'Failed to upload resume.'));
       setRecommendations(null);
@@ -267,24 +235,6 @@ const ResumePage = () => {
               ))}
             </div>
           )}
-        </section>
-      )}
-
-      {autoJobs.length > 0 && (
-        <section className="card">
-          <h3>Auto-Matched Jobs from 3 Random Skills</h3>
-          {selectedSkills.length > 0 && (
-            <p className="muted"><strong>Selected skills:</strong> {selectedSkills.join(', ')}</p>
-          )}
-          <ul>
-            {autoJobs.slice(0, 10).map((job) => (
-              <li key={job.id}>
-                <button type="button" className="link-btn" onClick={() => navigate(`/jobs/${job.id}`)}>
-                  {job.title} — {job.company}
-                </button>
-              </li>
-            ))}
-          </ul>
         </section>
       )}
 

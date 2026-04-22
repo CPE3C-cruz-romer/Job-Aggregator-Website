@@ -9,7 +9,6 @@ export const AuthProvider = ({ children }) => {
     return raw ? JSON.parse(raw) : null;
   });
   const [isEmployer, setIsEmployer] = useState(() => localStorage.getItem('isEmployer') === '1');
-  const isAuthenticated = Boolean(user) && Boolean(localStorage.getItem('accessToken') || localStorage.getItem('token'));
 
   const syncAuth = (data) => {
     localStorage.setItem('accessToken', data.access);
@@ -20,19 +19,6 @@ export const AuthProvider = ({ children }) => {
     setIsEmployer(Boolean(data.is_employer));
   };
 
-  const postWithFallback = async (endpoints, payload) => {
-    let lastError;
-    for (const endpoint of endpoints) {
-      try {
-        return await api.post(endpoint, payload);
-      } catch (error) {
-        lastError = error;
-        if (error?.response?.status !== 404) throw error;
-      }
-    }
-    throw lastError;
-  };
-
   const login = async (username, password) => {
     const { data } = await api.post('/auth/login/', { username, password });
     syncAuth(data);
@@ -40,10 +26,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const loginEmployer = async (username, password) => {
-    const { data } = await postWithFallback(
-      ['/auth/employer/login/', '/employer/login/'],
-      { username, password },
-    );
+    const { data } = await api.post('/auth/employer/login/', { username, password });
     syncAuth(data);
     return data;
   };
@@ -60,10 +43,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const registerEmployer = async (payload) => {
-    const { data } = await postWithFallback(
-      ['/auth/employer/register/', '/employer/register/'],
-      payload,
-    );
+    const { data } = await api.post('/auth/employer/register/', payload);
     syncAuth(data);
   };
 
@@ -74,8 +54,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const value = useMemo(
-    () => ({ user, isEmployer, isAuthenticated, login, loginEmployer, loginWithGoogle, register, registerEmployer, logout }),
-    [user, isEmployer, isAuthenticated]
+    () => ({ user, isEmployer, login, loginEmployer, loginWithGoogle, register, registerEmployer, logout }),
+    [user, isEmployer]
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

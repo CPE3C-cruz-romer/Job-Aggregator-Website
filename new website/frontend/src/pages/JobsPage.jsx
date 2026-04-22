@@ -27,38 +27,7 @@ const JobsPage = () => {
     }
   };
 
-  const loadJobsBySkills = async (skills = []) => {
-    if (!Array.isArray(skills) || skills.length === 0) {
-      await loadJobs();
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const skillsQuery = encodeURIComponent(skills.join(','));
-      const { data } = await api.get(`/jobs/?skills=${skillsQuery}&randomize=1&t=${Date.now()}`);
-      setJobs(Array.isArray(data) ? data : []);
-    } catch (error) {
-      setMessage(parseApiError(error, 'Failed to fetch skill-matched jobs.'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => { loadJobs(); }, []);
-
-  useEffect(() => {
-    const onResumeRefresh = (event) => {
-      const matchedSkills = event?.detail?.matchedSkills || [];
-      loadJobsBySkills(matchedSkills.slice(0, 3));
-      if (matchedSkills.length > 0) {
-        setMessage(`Jobs refreshed using resume skills: ${matchedSkills.slice(0, 6).join(', ')}`);
-      }
-    };
-
-    window.addEventListener('jobs:refresh-requested', onResumeRefresh);
-    return () => window.removeEventListener('jobs:refresh-requested', onResumeRefresh);
-  }, []);
 
   const saveJob = async (jobId) => {
     const token = localStorage.getItem('accessToken');

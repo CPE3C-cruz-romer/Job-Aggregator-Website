@@ -1,11 +1,9 @@
 import re
-import random
 
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.db import IntegrityError
-from django.db.models import Q
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from rest_framework import status, viewsets
@@ -33,7 +31,6 @@ from .services import (
     extract_text_from_image,
     has_meaningful_resume_text,
     match_resume_skills,
-    parse_resume_profile,
     recommend_jobs_for_skills,
 )
 from .db_ready import ensure_db_ready
@@ -76,13 +73,10 @@ def employer_register_view(request):
     except Exception as exc:
         return Response({'error': f'Database initialization failed: {str(exc)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    try:
-        serializer = EmployerRegisterSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        return Response(_token_response(user), status=status.HTTP_201_CREATED)
-    except IntegrityError:
-        return Response({'error': 'Username or email already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+    serializer = EmployerRegisterSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    user = serializer.save()
+    return Response(_token_response(user), status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
@@ -213,33 +207,6 @@ class JobViewSet(viewsets.ModelViewSet):
     authentication_classes = []
     permission_classes = [AllowAny]
     search_fields = ['title', 'location', 'company', 'description']
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        skills_param = (self.request.query_params.get('skills') or '').strip()
-        if skills_param:
-            skills = [skill.strip() for skill in skills_param.split(',') if skill.strip()]
-            if skills:
-                skills_query = Q()
-                for skill in skills:
-                    skills_query |= (
-                        Q(title__icontains=skill)
-                        | Q(description__icontains=skill)
-                        | Q(requirements__icontains=skill)
-                        | Q(company__icontains=skill)
-                        | Q(location__icontains=skill)
-                    )
-                queryset = queryset.filter(skills_query)
-
-        randomize = str(self.request.query_params.get('randomize', '1')).lower()
-        if self.action == 'list':
-            if randomize not in {'0', 'false', 'no'}:
-                queryset = queryset.order_by('?')
-            else:
-                queryset = queryset.order_by('-priority_score', '-created_at')
-            return queryset[:10]
-
-        return queryset
 
     def initial(self, request, *args, **kwargs):
         try:
@@ -409,6 +376,13 @@ class ResumeViewSet(viewsets.ModelViewSet):
                     extracted_text = clean_extracted_text(extract_text_from_docx(resume_file))
         elif uploaded_image and resume.image:
             with resume.image.open('rb') as image_file:
+                if image_contains_face(image_file):
+                    resume.extracted_text = ''
+                    resume.save(update_fields=['image', 'file', 'extracted_text'])
+                    return Response(
+                        {'error': 'Invalid resume file. Please upload a document with text content.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 extracted_text = extract_text_from_image(image_file)
 
         if nickname:
@@ -424,30 +398,8 @@ class ResumeViewSet(viewsets.ModelViewSet):
 
         resume.extracted_text = extracted_text
         resume.save(update_fields=['image', 'file', 'extracted_text'])
-        profile_data = parse_resume_profile(extracted_text)
-        extracted_skills = profile_data['extracted_skills']
-        if not extracted_skills:
-            return Response(
-                {
-                    'error': (
-                        'No known skills were detected in the uploaded resume text. '
-                        'Please upload a clearer resume with a dedicated skills section.'
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        selected_skills = random.sample(extracted_skills, min(3, len(extracted_skills))) if extracted_skills else []
-        jobs = Job.objects.all()
-        recommendations = {'extracted_skills': extracted_skills, 'profile': profile_data['profile'], 'recommended_jobs': []}
-        if jobs.exists():
-            recommendations = recommend_jobs_for_skills(extracted_text, jobs)
 
-        payload = self.get_serializer(resume).data
-        payload['extracted_skills'] = extracted_skills
-        payload['selected_skills'] = selected_skills
-        payload['profile'] = profile_data['profile']
-        payload['recommendations'] = recommendations
-        return Response(payload, status=status.HTTP_201_CREATED)
+        return Response(self.get_serializer(resume).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['get'])
     def recommendations(self, request):

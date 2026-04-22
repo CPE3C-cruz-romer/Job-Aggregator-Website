@@ -1,6 +1,5 @@
 import logging
 
-from django.conf import settings
 from django.http import JsonResponse
 
 logger = logging.getLogger(__name__)
@@ -33,30 +32,5 @@ class ApiJsonErrorMiddleware:
                     content_type,
                 )
                 return JsonResponse({'error': 'Request failed.'}, status=response.status_code)
-
-        return response
-
-
-class SecurityHeadersMiddleware:
-    """
-    Apply security headers with sane defaults for OAuth popup compatibility.
-    """
-
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
-        response = self.get_response(request)
-
-        coop = getattr(settings, 'CROSS_ORIGIN_OPENER_POLICY', 'same-origin-allow-popups')
-        coep = getattr(settings, 'CROSS_ORIGIN_EMBEDDER_POLICY', 'unsafe-none')
-        corp = getattr(settings, 'CROSS_ORIGIN_RESOURCE_POLICY', 'same-site')
-
-        if coop:
-            response['Cross-Origin-Opener-Policy'] = coop
-        if coep:
-            response['Cross-Origin-Embedder-Policy'] = coep
-        if corp:
-            response['Cross-Origin-Resource-Policy'] = corp
 
         return response
