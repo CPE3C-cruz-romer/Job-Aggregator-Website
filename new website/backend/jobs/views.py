@@ -615,10 +615,13 @@ class UserProfileViewSet(viewsets.ModelViewSet):
             for field_name in field_names:
                 single = payload.get(field_name)
                 if isinstance(single, str):
-                    values.extend(re.split(r'[,|\n]+', single))
+                    if not (hasattr(payload, 'getlist') and payload.getlist(field_name)):
+                        values.extend(re.split(r'[,|\n]+', single))
                 elif isinstance(single, list):
                     values.extend(single)
-            return [str(item).strip() for item in values if str(item).strip()]
+            cleaned = [str(item).strip().lower() for item in values if str(item).strip()]
+            # keep stable order but drop duplicates
+            return list(dict.fromkeys(cleaned))
 
         for text_field in ('full_name', 'experience'):
             raw_value = payload.get(text_field)

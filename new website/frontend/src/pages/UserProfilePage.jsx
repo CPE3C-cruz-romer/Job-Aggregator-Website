@@ -22,6 +22,7 @@ const UserProfilePage = () => {
   useEffect(() => { loadProfile(); }, []);
 
   const updateField = (field, value) => setProfile((prev) => ({ ...prev, [field]: value }));
+  const uniqueTerms = (items) => Array.from(new Set((items || []).map((item) => String(item).trim().toLowerCase()).filter(Boolean)));
 
   const saveProfile = async (e) => {
     e.preventDefault();
@@ -29,8 +30,8 @@ const UserProfilePage = () => {
       const formData = new FormData();
       formData.append('full_name', profile.full_name || '');
       formData.append('experience', profile.experience || '');
-      (profile.skills || []).forEach((skill) => formData.append('skills', skill));
-      (profile.job_interests || []).forEach((interest) => formData.append('job_interests', interest));
+      uniqueTerms(profile.skills).forEach((skill) => formData.append('skills', skill));
+      uniqueTerms(profile.job_interests).forEach((interest) => formData.append('job_interests', interest));
       if (selectedImage) formData.append('profile_picture', selectedImage);
       await api.patch('/user/profile/me/', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -46,38 +47,38 @@ const UserProfilePage = () => {
 
   return (
     <section className="page">
-      <div className="hero compact"><h1>My Profile</h1></div>
       <form className="card" onSubmit={saveProfile}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+          <button
+            type="button"
+            className="btn-alt"
+            style={{ width: 128, height: 128, borderRadius: '50%', padding: 0, overflow: 'hidden' }}
+            onClick={() => document.getElementById(`profile-upload-${uploadNonce}`)?.click()}
+            aria-label="Upload profile picture"
+          >
+            {(previewUrl || profile.profile_picture_url) ? (
+              <img
+                src={previewUrl || profile.profile_picture_url}
+                alt="Profile preview"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+              />
+            ) : (
+              <span>Upload</span>
+            )}
+          </button>
+        </div>
         <input value={profile.full_name || ''} placeholder="Name" onChange={(e) => updateField('full_name', e.target.value)} />
         <input
           value={(profile.skills || []).join(', ')}
           placeholder="Skills"
-          onChange={(e) => updateField('skills', e.target.value.split(',').map((i) => i.trim()).filter(Boolean))}
+          onChange={(e) => updateField('skills', uniqueTerms(e.target.value.split(',')))}
         />
         <input
           value={(profile.job_interests || []).join(', ')}
           placeholder="Job preferences"
-          onChange={(e) => updateField('job_interests', e.target.value.split(',').map((i) => i.trim()).filter(Boolean))}
+          onChange={(e) => updateField('job_interests', uniqueTerms(e.target.value.split(',')))}
         />
         <textarea value={profile.experience || ''} placeholder="Experience (optional)" onChange={(e) => updateField('experience', e.target.value)} />
-        <label>Profile picture</label>
-        <button
-          type="button"
-          className="btn-alt"
-          style={{ width: 128, height: 128, borderRadius: '50%', padding: 0, overflow: 'hidden' }}
-          onClick={() => document.getElementById(`profile-upload-${uploadNonce}`)?.click()}
-          aria-label="Upload profile picture"
-        >
-          {(previewUrl || profile.profile_picture_url) ? (
-            <img
-              src={previewUrl || profile.profile_picture_url}
-              alt="Profile preview"
-              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
-            />
-          ) : (
-            <span>Upload</span>
-          )}
-        </button>
         <input
           id={`profile-upload-${uploadNonce}`}
           type="file"

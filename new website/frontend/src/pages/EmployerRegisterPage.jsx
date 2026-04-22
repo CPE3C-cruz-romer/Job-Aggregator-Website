@@ -18,7 +18,10 @@ const EmployerRegisterPage = () => {
     setError('');
     setLoading(true);
     try {
-      await registerEmployer(form);
+      await registerEmployer({
+        ...form,
+        contact_email: form.contact_email || form.email,
+      });
       navigate('/employer/workspace');
     } catch (err) {
       setError(parseApiError(err, 'Employer registration failed.'));
@@ -50,12 +53,12 @@ const EmployerRegisterPage = () => {
       <form className="auth-card" onSubmit={onSubmit}>
         <h2>Create Employer Account</h2>
         <p className="muted">Create your company profile to post jobs directly from your employer workspace.</p>
-        <input placeholder="Username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
-        <input placeholder="Business email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-        <input placeholder="Company name" value={form.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} />
-        <input placeholder="Recruiter contact email" value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} />
+        <input placeholder="Username" required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+        <input placeholder="Business email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+        <input placeholder="Company name" required value={form.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} />
+        <input placeholder="Recruiter contact email (optional)" value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} />
         <input placeholder="Recruiter contact phone" value={form.contact_phone} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} />
-        <input placeholder="Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+        <input placeholder="Password" type="password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
         {error && <p className="error" role="alert">{error}</p>}
         <button className="btn" type="submit" disabled={loading}>{loading ? 'Registering...' : 'Register Employer'}</button>
         <div className="google-wrap">

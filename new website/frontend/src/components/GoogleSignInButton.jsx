@@ -2,21 +2,29 @@ import React, { useEffect, useRef, useState } from 'react';
 
 const GoogleSignInButton = ({ onCredential, onError }) => {
   const containerRef = useRef(null);
+  const credentialRef = useRef(onCredential);
+  const errorRef = useRef(onError);
+  const initializedClientRef = useRef('');
   const [ready, setReady] = useState(false);
   const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+
+  useEffect(() => {
+    credentialRef.current = onCredential;
+    errorRef.current = onError;
+  }, [onCredential, onError]);
 
   useEffect(() => {
     setReady(false);
 
     if (!clientId) {
-      onError?.(
+      errorRef.current?.(
         'Google login is disabled: missing REACT_APP_GOOGLE_CLIENT_ID. Set it in frontend/.env (local) or in your Vercel Environment Variables.'
       );
       return;
     }
 
     if (clientId.startsWith('GOCSPX-')) {
-      onError?.(
+      errorRef.current?.(
         'Google login is disabled: REACT_APP_GOOGLE_CLIENT_ID must be a Client ID ending in .apps.googleusercontent.com (not a client secret).'
       );
       return;
@@ -31,11 +39,18 @@ const GoogleSignInButton = ({ onCredential, onError }) => {
       if (!window.google?.accounts?.id) return false;
 
       try {
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: (resp) => onCredential?.(resp.credential),
-          ux_mode: 'popup',
-        });
+        if (
+          initializedClientRef.current !== clientId
+          && window.__googleClientInitializedId !== clientId
+        ) {
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            callback: (resp) => credentialRef.current?.(resp.credential),
+            ux_mode: 'popup',
+          });
+          initializedClientRef.current = clientId;
+          window.__googleClientInitializedId = clientId;
+        }
 
         containerRef.current.innerHTML = '';
         window.google.accounts.id.renderButton(containerRef.current, {
@@ -47,7 +62,7 @@ const GoogleSignInButton = ({ onCredential, onError }) => {
         setReady(true);
         return true;
       } catch (err) {
-        onError?.('Google auth initialization failed. Verify authorized origins in Google Cloud Console.');
+        errorRef.current?.('Google auth initialization failed. Verify authorized origins in Google Cloud Console.');
         return true;
       }
     };
@@ -59,7 +74,7 @@ const GoogleSignInButton = ({ onCredential, onError }) => {
       const mounted = mountGoogleButton();
       if (mounted || attempts >= maxAttempts) {
         if (!mounted) {
-          onError?.('Google SDK failed to load. You can still login with username/password.');
+          errorRef.current?.('Google SDK failed to load. You can still login with username/password.');
         }
         window.clearInterval(interval);
       }
@@ -69,7 +84,7 @@ const GoogleSignInButton = ({ onCredential, onError }) => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [clientId, onCredential, onError]);
+  }, [clientId]);
 
   if (!clientId) return null;
   return <div ref={containerRef} style={{ display: ready ? 'block' : 'none' }} />;

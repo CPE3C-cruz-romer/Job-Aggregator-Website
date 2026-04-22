@@ -42,7 +42,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
 class EmployerRegisterSerializer(UserRegisterSerializer):
     company_name = serializers.CharField(max_length=255)
-    contact_email = serializers.EmailField()
+    contact_email = serializers.EmailField(required=False, allow_blank=True)
     contact_phone = serializers.CharField(max_length=50, allow_blank=True, required=False)
 
     class Meta(UserRegisterSerializer.Meta):
@@ -50,13 +50,13 @@ class EmployerRegisterSerializer(UserRegisterSerializer):
 
     def create(self, validated_data):
         company_name = validated_data.pop('company_name')
-        contact_email = validated_data.pop('contact_email')
+        contact_email = (validated_data.pop('contact_email', '') or '').strip()
         contact_phone = validated_data.pop('contact_phone', '')
         user = super().create(validated_data)
         EmployerProfile.objects.create(
             user=user,
             company_name=company_name,
-            contact_email=contact_email,
+            contact_email=contact_email or user.email,
             contact_phone=contact_phone,
         )
         return user
