@@ -1,6 +1,7 @@
+from datetime import timedelta
 import os
 from pathlib import Path
-from datetime import timedelta
+
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -10,30 +11,12 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-secret-key-change-me')
 DEBUG = os.getenv('DEBUG', '1') == '1'
 
 
-def _env_csv(name: str, default: str) -> list[str]:
-    value = os.getenv(name, default)
+def _split_csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(',') if item.strip()]
-
-
-ALLOWED_HOSTS = _env_csv(
-    'ALLOWED_HOSTS',
-    '127.0.0.1,localhost,job-aggregator-website.onrender.com',
-)
 
 
 def _env_csv(name: str, default: str) -> list[str]:
-    value = os.getenv(name, default)
-    return [item.strip() for item in value.split(',') if item.strip()]
-
-
-ALLOWED_HOSTS = _env_csv(
-    'ALLOWED_HOSTS',
-    '127.0.0.1,localhost,job-aggregator-website.onrender.com',
-)
-
-
-def _split_csv(value):
-    return [item.strip() for item in value.split(',') if item.strip()]
+    return _split_csv(os.getenv(name, default))
 
 
 ALLOWED_HOSTS = _split_csv(
@@ -123,19 +106,21 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOWED_ORIGINS = _env_csv(
-    'CORS_ALLOWED_ORIGINS',
-    (
-        'http://localhost:3000,'
-        'http://127.0.0.1:3000,'
-        'https://www.cpe3cjobaggregator.com,'
-        'https://cpe3cjobaggregator.com,'
-        'https://job-aggregator-website.onrender.com'
-    ),
+    'CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000'
 )
+CORS_REQUIRED_ORIGINS = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://www.cpe3cjobaggregator.com',
+    'https://cpe3cjobaggregator.com',
+    'https://job-aggregator-website.onrender.com',
+]
+CORS_ALLOWED_ORIGINS = list(dict.fromkeys(CORS_ALLOWED_ORIGINS + CORS_REQUIRED_ORIGINS))
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://([a-z0-9-]+\.)*vercel\.app$",
 ]
 CORS_ALLOW_CREDENTIALS = True
+CORS_URLS_REGEX = r'^/api/.*$'
 
 REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': (

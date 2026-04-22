@@ -196,7 +196,8 @@ const JobsPage = () => {
       setMessage(`Jobs refreshed for "${data.query}" in "${data.where}" (created: ${data.created}, updated: ${data.updated}).`);
     } catch (error) {
       console.error('Refresh from API failed:', error?.response?.data || error);
-      setMessage(parseApiError(error, 'Unable to refresh jobs from API right now.'));
+      await loadJobs({ searchQueries: filters.title.trim() ? [filters.title.trim()] : preferredQueries, nextSkip: 0, append: false });
+      setMessage(parseApiError(error, 'Refresh API is temporarily unavailable. Loaded current jobs from database instead.'));
     } finally {
       setLoading(false);
     }
