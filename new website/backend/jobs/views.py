@@ -1,3 +1,4 @@
+import logging
 import re
 from functools import reduce
 
@@ -49,6 +50,8 @@ INVALID_JOB_TITLE_PATTERNS = (
     'sample job',
     'test job',
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _exclude_non_production_jobs(queryset):
@@ -787,15 +790,20 @@ class ResumeViewSet(viewsets.ModelViewSet):
         uploaded_image = request.FILES.get('image') or request.FILES.get('camera_image')
         if not uploaded_file and not uploaded_image:
             return Response({'error': 'Upload a PDF or resume image first.'}, status=status.HTTP_400_BAD_REQUEST)
-        if uploaded_file and not uploaded_file.name.lower().endswith(('.pdf', '.docx')):
-            return Response({'error': 'Resume file must be a PDF or DOCX.'}, status=status.HTTP_400_BAD_REQUEST)
-        if uploaded_image:
-            allowed_ext = ('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tif', '.tiff')
-            if not uploaded_image.name.lower().endswith(allowed_ext):
-                return Response(
-                    {'error': 'Resume image must be jpg, jpeg, png, webp, bmp, tif, or tiff.'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+
+        ocr_warning = None
+        upload_warning = None
+        accepted_doc_ext = (
+            '.pdf', '.docx', '.doc', '.odt', '.rtf', '.txt', '.md',
+        )
+
+        # If an image is uploaded under `file`, process it as image to avoid unnecessary 400 errors.
+        if uploaded_file and not uploaded_image:
+            file_mime = (getattr(uploaded_file, 'content_type', '') or '').lower()
+            file_name = (getattr(uploaded_file, 'name', '') or '').lower()
+            if file_mime.startswith('image/') or file_name.endswith(('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tif', '.tiff', '.heic', '.heif')):
+                uploaded_image = uploaded_file
+                uploaded_file = None
 
         serializer = self.get_serializer(resume, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -814,22 +822,30 @@ class ResumeViewSet(viewsets.ModelViewSet):
         nickname = (request.data.get('nickname') or '').strip()
         if uploaded_file and resume.file:
             low_name = resume.file.name.lower()
-            with resume.file.open('rb') as resume_file:
-                if low_name.endswith('.pdf'):
-                    extracted_text = clean_extracted_text(extract_text_from_pdf(resume_file))
-                elif low_name.endswith('.docx'):
-                    extracted_text = clean_extracted_text(extract_text_from_docx(resume_file))
+            try:
+                with resume.file.open('rb') as resume_file:
+                    if low_name.endswith('.pdf'):
+                        extracted_text = clean_extracted_text(extract_text_from_pdf(resume_file))
+                    elif low_name.endswith('.docx'):
+                        extracted_text = clean_extracted_text(extract_text_from_docx(resume_file))
+                    elif low_name.endswith(accepted_doc_ext):
+                        upload_warning = 'File uploaded successfully, but advanced text extraction is currently optimized for PDF, DOCX, and images.'
+                    else:
+                        upload_warning = 'File uploaded successfully, but this format is not yet supported for text extraction.'
+            except Exception as exc:
+                logger.exception('Resume file processing failed for user_id=%s: %s', request.user.id, exc)
+                upload_warning = 'File uploaded successfully, but we could not process this file for text extraction.'
         elif uploaded_image and resume.image:
-            with resume.image.open('rb') as image_file:
-                image_quality = analyze_resume_image_quality(image_file)
-                if not image_quality['readable']:
-                    resume.extracted_text = ''
-                    resume.save(update_fields=['image', 'file', 'extracted_text'])
-                    return Response(
-                        {'error': image_quality['reason'], 'image_quality': image_quality},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-                extracted_text = extract_text_from_image(image_file)
+            try:
+                with resume.image.open('rb') as image_file:
+                    image_quality = analyze_resume_image_quality(image_file)
+                    if not image_quality['readable']:
+                        ocr_warning = image_quality['reason']
+                    else:
+                        extracted_text = extract_text_from_image(image_file)
+            except Exception as exc:
+                logger.exception('Resume image processing failed for user_id=%s: %s', request.user.id, exc)
+                upload_warning = 'Image uploaded successfully, but we could not process it for text extraction.'
 
         if nickname:
             extracted_text = f"{extracted_text}\nnickname: {nickname}".strip()
@@ -837,10 +853,15 @@ class ResumeViewSet(viewsets.ModelViewSet):
         if not has_meaningful_resume_text(extracted_text):
             resume.extracted_text = ''
             resume.save(update_fields=['image', 'file', 'extracted_text'])
-            return Response(
-                {'error': 'Unable to extract text from the uploaded resume. Please upload a clearer or text-based document.'},
-                status=status.HTTP_400_BAD_REQUEST,
+            payload = self.get_serializer(resume).data
+            if image_quality:
+                payload['image_quality'] = image_quality
+            payload['ocr_warning'] = (
+                ocr_warning
+                or upload_warning
+                or 'Resume uploaded successfully, but text could not be reliably extracted. Try a clearer file for skill matching.'
             )
+            return Response(payload, status=status.HTTP_201_CREATED)
 
         resume.extracted_text = extracted_text
         resume.save(update_fields=['image', 'file', 'extracted_text'])
@@ -848,6 +869,10 @@ class ResumeViewSet(viewsets.ModelViewSet):
         payload = self.get_serializer(resume).data
         if image_quality:
             payload['image_quality'] = image_quality
+        if ocr_warning:
+            payload['ocr_warning'] = ocr_warning
+        if upload_warning:
+            payload['upload_warning'] = upload_warning
         return Response(payload, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['get'])
