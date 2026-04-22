@@ -8,8 +8,7 @@ def _resume_file_upload_path(instance, filename):
 
 
 def _resume_image_upload_path(instance, filename):
-    user_id = getattr(instance, 'user_id', 'unknown')
-    return f"resumes/user_{user_id}/images/{filename}"
+    return f"resume-images/{filename}"
 
 
 class EmployerProfile(models.Model):

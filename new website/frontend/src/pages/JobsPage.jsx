@@ -78,6 +78,11 @@ const JobsPage = () => {
 
   useEffect(() => {
     const boot = async () => {
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('access') || localStorage.getItem('token');
+      if (!token) {
+        loadJobs();
+        return;
+      }
       try {
         const { data } = await api.get('/user/profile/');
         localStorage.setItem('userProfile', JSON.stringify(data));
