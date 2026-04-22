@@ -21,6 +21,9 @@ class UserRegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         full_name = (validated_data.pop('full_name', '') or '').strip()
         job_preferences = validated_data.pop('jobPreferences', [])
+        single_preference = self.initial_data.get('jobPreference')
+        if isinstance(single_preference, str) and single_preference.strip():
+            job_preferences = [single_preference.strip()]
         user = User(
             username=validated_data['username'],
             email=validated_data.get('email', ''),

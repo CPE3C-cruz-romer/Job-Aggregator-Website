@@ -57,19 +57,14 @@ const RegisterPage = () => {
           </>
         ) : (
           <>
-            <label>Select work preferences</label>
+            <label>Select preferred work type</label>
             <div className="actions">
               {preferenceOptions.map((option) => (
                 <button
                   key={option}
                   type="button"
-                  className={form.jobPreferences.includes(option) ? 'btn' : 'btn-alt'}
-                  onClick={() => setForm((prev) => ({
-                    ...prev,
-                    jobPreferences: prev.jobPreferences.includes(option)
-                      ? prev.jobPreferences.filter((item) => item !== option)
-                      : [...prev.jobPreferences, option],
-                  }))}
+                  className={form.jobPreferences[0] === option ? 'btn' : 'btn-alt'}
+                  onClick={() => setForm((prev) => ({ ...prev, jobPreferences: [option] }))}
                 >
                   {option}
                 </button>

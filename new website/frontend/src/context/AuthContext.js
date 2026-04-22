@@ -23,32 +23,47 @@ export const AuthProvider = ({ children }) => {
     setOnboardingCompleted(Boolean(data.onboarding_completed));
   };
 
+  const hydrateUserProfile = async () => {
+    try {
+      const { data } = await api.get('/user/profile/');
+      localStorage.setItem('userProfile', JSON.stringify(data));
+      return data;
+    } catch {
+      return null;
+    }
+  };
+
   const login = async (username, password) => {
     const { data } = await api.post('/auth/login/', { username, password });
     syncAuth(data);
+    await hydrateUserProfile();
     return data;
   };
 
   const loginEmployer = async (username, password) => {
     const { data } = await api.post('/auth/employer/login/', { username, password });
     syncAuth(data);
+    await hydrateUserProfile();
     return data;
   };
 
   const loginWithGoogle = async (credential) => {
     const { data } = await api.post('/auth/google/', { credential });
     syncAuth(data);
+    await hydrateUserProfile();
     return data;
   };
 
   const register = async (payload) => {
     const { data } = await api.post('/auth/register/', payload);
     syncAuth(data);
+    await hydrateUserProfile();
   };
 
   const registerEmployer = async (payload) => {
     const { data } = await api.post('/auth/employer/register/', payload);
     syncAuth(data);
+    await hydrateUserProfile();
   };
 
   const logout = () => {

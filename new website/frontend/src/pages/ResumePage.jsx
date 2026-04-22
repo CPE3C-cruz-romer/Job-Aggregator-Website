@@ -17,6 +17,7 @@ const ResumePage = () => {
   const [streaming, setStreaming] = useState(false);
   const [captureBlob, setCaptureBlob] = useState(null);
   const [faceWelcomeMessage, setFaceWelcomeMessage] = useState('');
+  const [facingMode, setFacingMode] = useState('environment');
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const detectionFrameRef = useRef(null);
@@ -113,10 +114,21 @@ const ResumePage = () => {
     }
   };
 
+  const stopCamera = () => {
+    if (detectionFrameRef.current) {
+      cancelAnimationFrame(detectionFrameRef.current);
+      detectionFrameRef.current = null;
+    }
+    const tracks = videoRef.current?.srcObject?.getTracks() || [];
+    tracks.forEach((t) => t.stop());
+    setStreaming(false);
+  };
+
   const startCamera = async () => {
     setError('');
     setFaceWelcomeMessage('');
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    stopCamera();
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facingMode } } });
     videoRef.current.srcObject = stream;
     setStreaming(true);
 
@@ -149,16 +161,6 @@ const ResumePage = () => {
     detectionFrameRef.current = requestAnimationFrame(detectFace);
   };
 
-  const stopCamera = () => {
-    if (detectionFrameRef.current) {
-      cancelAnimationFrame(detectionFrameRef.current);
-      detectionFrameRef.current = null;
-    }
-    const tracks = videoRef.current?.srcObject?.getTracks() || [];
-    tracks.forEach((t) => t.stop());
-    setStreaming(false);
-  };
-
   const capture = () => {
     const canvas = canvasRef.current;
     canvas.width = videoRef.current.videoWidth;
@@ -189,6 +191,11 @@ const ResumePage = () => {
         <h3>Camera Capture</h3>
         <div className="actions">
           {!streaming && <button className="btn-alt" onClick={startCamera}>Start Camera</button>}
+          {!streaming && (
+            <button type="button" className="btn-alt" onClick={() => setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'))}>
+              Use {facingMode === 'user' ? 'Back' : 'Front'} Camera
+            </button>
+          )}
           {streaming && <button className="btn-alt" onClick={capture}>Capture Resume</button>}
           {streaming && <button className="btn-alt" onClick={stopCamera}>Stop Camera</button>}
         </div>

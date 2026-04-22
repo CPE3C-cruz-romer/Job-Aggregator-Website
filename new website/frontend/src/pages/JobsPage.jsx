@@ -27,8 +27,8 @@ const JobsPage = () => {
       });
       if (searchQuery) params.set('query', searchQuery);
       const { data, headers } = await api.get(`/jobs/?${params.toString()}`);
-      console.log('Jobs loaded:', data);
-      setJobs((prev) => (append ? [...prev, ...data] : data));
+      const payload = Array.isArray(data) ? data : (data?.results || []);
+      setJobs((prev) => (append ? [...prev, ...payload] : payload));
       setHasMoreJobs(headers['x-has-more'] === '1');
       setSkip(Number(headers['x-next-skip'] || nextSkip + 10));
     } catch (error) {
@@ -40,18 +40,28 @@ const JobsPage = () => {
   };
 
   useEffect(() => {
-    const profileRaw = localStorage.getItem('userProfile');
-    if (!profileRaw) {
-      loadJobs();
-      return;
-    }
-    try {
-      const profile = JSON.parse(profileRaw);
-      const derivedQuery = (profile.job_interests || []).join(' ');
-      loadJobs({ searchQuery: derivedQuery });
-    } catch {
-      loadJobs();
-    }
+    const boot = async () => {
+      try {
+        const { data } = await api.get('/user/profile/');
+        localStorage.setItem('userProfile', JSON.stringify(data));
+        const derivedQuery = (data.job_interests || []).join(' ');
+        await loadJobs({ searchQuery: derivedQuery });
+      } catch {
+        const profileRaw = localStorage.getItem('userProfile');
+        if (!profileRaw) {
+          loadJobs();
+          return;
+        }
+        try {
+          const profile = JSON.parse(profileRaw);
+          const derivedQuery = (profile.job_interests || []).join(' ');
+          loadJobs({ searchQuery: derivedQuery });
+        } catch {
+          loadJobs();
+        }
+      }
+    };
+    boot();
   }, []);
   useEffect(() => {
     const loadMatches = async () => {

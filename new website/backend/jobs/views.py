@@ -228,7 +228,9 @@ class JobViewSet(viewsets.ModelViewSet):
         company = (self.request.query_params.get('company') or '').strip()
         category = (self.request.query_params.get('category') or '').strip()
         skills_param = (self.request.query_params.get('skills') or '').strip()
-        query_words = self.request.query_params.getlist('query')
+        query_words = []
+        for value in self.request.query_params.getlist('query'):
+            query_words.extend(re.split(r'[\s,|]+', str(value)))
         if query and not query_words:
             query_words = re.split(r'[\s,]+', query)
         normalized_words = [word.strip().lower() for word in query_words if str(word).strip()]
@@ -282,51 +284,17 @@ class JobViewSet(viewsets.ModelViewSet):
         return [str(item).strip().lower() for item in items if str(item).strip()]
 
     @classmethod
-    def _expand_interest_terms(cls, interests):
-        mapping = {
-            'it': ['software', 'developer', 'engineering', 'technology', 'devops', 'data'],
-            'construction': ['construction', 'civil', 'site', 'foreman', 'electrician', 'plumber'],
-            'accountant': ['accountant', 'accounting', 'finance', 'bookkeeper', 'auditor'],
-            'healthcare': ['nurse', 'medical', 'health', 'clinic', 'hospital'],
-            'marketing': ['marketing', 'seo', 'brand', 'content', 'digital marketing'],
-            'sales': ['sales', 'account executive', 'business development'],
-        }
-        expanded = set(cls._normalize_terms(interests))
-        for item in list(expanded):
-            expanded.update(mapping.get(item, []))
-        return expanded
-
-    @classmethod
-    def _rank_jobs(cls, jobs, interests, skills):
-        interest_terms = cls._expand_interest_terms(interests)
-        skill_terms = set(cls._normalize_terms(skills))
-        ranked_jobs = []
-        for job in jobs:
-            required = {str(item).strip().lower() for item in (job.required_skills or []) if str(item).strip()}
-            title_tokens = f"{job.title or ''} {job.category or ''}".lower()
-            preference_match = 1 if any(term in title_tokens for term in interest_terms) else 0
-            skill_matches = len(required.intersection(skill_terms))
-            score = (skill_matches * 20) + (preference_match * 10)
-            if job.is_direct_employer:
-                score += 10_000
-            job.match_score = score
-            job.matching_skills_count = skill_matches
-            ranked_jobs.append(job)
-
-        ranked_jobs.sort(
-            key=lambda item: (
-                1 if item.is_direct_employer else 0,
-                item.matching_skills_count,
-                1 if any(term in f"{item.title or ''} {item.category or ''}".lower() for term in interest_terms) else 0,
-                item.created_at.timestamp(),
-            ),
-            reverse=True,
-        )
-        return ranked_jobs
-
-    @staticmethod
-    def _normalize_terms(items):
-        return [str(item).strip().lower() for item in items if str(item).strip()]
+    def _collect_param_terms(cls, request, param_name):
+        raw_values = request.query_params.getlist(param_name)
+        if not raw_values:
+            single_value = request.query_params.get(param_name)
+            raw_values = [single_value] if single_value else []
+        terms = []
+        for raw in raw_values:
+            if raw is None:
+                continue
+            terms.extend(re.split(r'[\s,|]+', str(raw)))
+        return cls._normalize_terms(terms)
 
     @classmethod
     def _expand_interest_terms(cls, interests):
@@ -426,14 +394,14 @@ class JobViewSet(viewsets.ModelViewSet):
         }
         return Response(response_payload)
 
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['get'], authentication_classes=[], permission_classes=[AllowAny])
     def match(self, request):
         user_id = request.query_params.get('userId')
-        interests = request.query_params.getlist('interests')
-        skills = request.query_params.getlist('skills')
+        interests = self._collect_param_terms(request, 'interests')
+        skills = self._collect_param_terms(request, 'skills')
 
         profile = None
-        if user_id:
+        if user_id and request.user.is_authenticated and str(request.user.id) == str(user_id):
             profile = UserProfile.objects.filter(user_id=user_id).first()
         elif request.user.is_authenticated:
             profile = UserProfile.objects.filter(user=request.user).first()
@@ -448,7 +416,8 @@ class JobViewSet(viewsets.ModelViewSet):
         page = max(1, self._safe_int(request.query_params.get('page'), 1))
         limit = min(25, max(1, self._safe_int(request.query_params.get('limit'), 10)))
 
-        cache_key = f"jobs_match:{request.user.id}:{','.join(sorted(normalized_interests))}:{','.join(sorted(normalized_skills))}"
+        profile_scope = str(profile.user_id) if profile else 'anon'
+        cache_key = f"jobs_match:{profile_scope}:{','.join(sorted(normalized_interests))}:{','.join(sorted(normalized_skills))}"
         ranked_ids = cache.get(cache_key)
         if ranked_ids is None:
             jobs = Job.objects.select_related('posted_by_employer').all()
@@ -690,8 +659,8 @@ class ResumeViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         resume, _ = Resume.objects.get_or_create(user=request.user)
 
-        uploaded_file = request.FILES.get('file')
-        uploaded_image = request.FILES.get('image')
+        uploaded_file = request.FILES.get('file') or request.FILES.get('resume')
+        uploaded_image = request.FILES.get('image') or request.FILES.get('camera_image')
         if not uploaded_file and not uploaded_image:
             return Response({'error': 'Upload a PDF or resume image first.'}, status=status.HTTP_400_BAD_REQUEST)
         if uploaded_file and not uploaded_file.name.lower().endswith(('.pdf', '.docx')):
@@ -767,7 +736,11 @@ class ResumeViewSet(viewsets.ModelViewSet):
         if not jobs.exists():
             return Response({'error': 'No jobs available for matching yet.'}, status=status.HTTP_404_NOT_FOUND)
 
-        recommendation_data = recommend_jobs_for_skills(resume.extracted_text, jobs)
+        cache_key = f"resume_reco:{request.user.id}:{hash(resume.extracted_text)}:{jobs.count()}"
+        recommendation_data = cache.get(cache_key)
+        if recommendation_data is None:
+            recommendation_data = recommend_jobs_for_skills(resume.extracted_text, jobs, limit=10)
+            cache.set(cache_key, recommendation_data, timeout=600)
         if not recommendation_data['extracted_skills']:
             return Response(
                 {'error': 'No known skills found in your resume. Please upload a clearer resume.'},

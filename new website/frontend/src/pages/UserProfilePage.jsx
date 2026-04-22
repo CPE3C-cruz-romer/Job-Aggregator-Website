@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api/client';
 import { parseApiError } from '../utils/error';
-import MobileCameraCapture from '../components/MobileCameraCapture';
 
 const UserProfilePage = () => {
   const [profile, setProfile] = useState(null);
   const [message, setMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [uploadNonce, setUploadNonce] = useState(0);
 
   const loadProfile = async () => {
     try {
@@ -60,30 +60,37 @@ const UserProfilePage = () => {
           onChange={(e) => updateField('job_interests', e.target.value.split(',').map((i) => i.trim()).filter(Boolean))}
         />
         <textarea value={profile.experience || ''} placeholder="Experience (optional)" onChange={(e) => updateField('experience', e.target.value)} />
-        <label>Profile picture upload</label>
+        <label>Profile picture</label>
+        <button
+          type="button"
+          className="btn-alt"
+          style={{ width: 128, height: 128, borderRadius: '50%', padding: 0, overflow: 'hidden' }}
+          onClick={() => document.getElementById(`profile-upload-${uploadNonce}`)?.click()}
+          aria-label="Upload profile picture"
+        >
+          {(previewUrl || profile.profile_picture_url) ? (
+            <img
+              src={previewUrl || profile.profile_picture_url}
+              alt="Profile preview"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+            />
+          ) : (
+            <span>Upload</span>
+          )}
+        </button>
         <input
+          id={`profile-upload-${uploadNonce}`}
           type="file"
           accept="image/*"
+          style={{ display: 'none' }}
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (!file) return;
             setSelectedImage(file);
             setPreviewUrl(URL.createObjectURL(file));
+            setUploadNonce((prev) => prev + 1);
           }}
         />
-        <MobileCameraCapture
-          onCapture={(file, imageUrl) => {
-            setSelectedImage(file);
-            setPreviewUrl(imageUrl);
-          }}
-        />
-        {(previewUrl || profile.profile_picture_url) && (
-          <img
-            src={previewUrl || profile.profile_picture_url}
-            alt="Profile preview"
-            style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: '50%' }}
-          />
-        )}
         <button className="btn" type="submit">Save Profile</button>
         {message && <p className="status">{message}</p>}
       </form>
