@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import api from '../api/client';
 
 const AuthContext = createContext(null);
@@ -13,8 +13,16 @@ export const AuthProvider = ({ children }) => {
   const isAuthenticated = Boolean(user) && Boolean(localStorage.getItem('accessToken') || localStorage.getItem('token'));
 
   const syncAuth = (data) => {
-    localStorage.setItem('accessToken', data.access);
-    localStorage.setItem('refreshToken', data.refresh);
+    const accessToken = data?.access || data?.token || data?.access_token || '';
+    const refreshToken = data?.refresh || data?.refresh_token || '';
+    if (accessToken) {
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('token', accessToken);
+    }
+    if (refreshToken) {
+      localStorage.setItem('refreshToken', refreshToken);
+      localStorage.setItem('refresh', refreshToken);
+    }
     localStorage.setItem('user', JSON.stringify(data.user));
     localStorage.setItem('isEmployer', data.is_employer ? '1' : '0');
     localStorage.setItem('onboardingCompleted', data.onboarding_completed ? '1' : '0');
@@ -66,12 +74,28 @@ export const AuthProvider = ({ children }) => {
     await hydrateUserProfile();
   };
 
-  const logout = () => {
-    localStorage.clear();
+  const clearAuth = () => {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('token');
+    localStorage.removeItem('access');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('refresh');
+    localStorage.removeItem('user');
+    localStorage.removeItem('isEmployer');
+    localStorage.removeItem('onboardingCompleted');
     setUser(null);
     setIsEmployer(false);
     setOnboardingCompleted(false);
   };
+  const logout = () => {
+    clearAuth();
+  };
+
+  useEffect(() => {
+    const onAuthExpired = () => clearAuth();
+    window.addEventListener('auth:expired', onAuthExpired);
+    return () => window.removeEventListener('auth:expired', onAuthExpired);
+  }, []);
 
   const value = useMemo(
     () => ({

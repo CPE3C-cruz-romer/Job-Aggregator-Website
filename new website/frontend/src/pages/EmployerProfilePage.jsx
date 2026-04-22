@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { parseApiError } from '../utils/error';
 
 const EmployerProfilePage = () => {
+  const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [message, setMessage] = useState('');
 
@@ -24,6 +26,11 @@ const EmployerProfilePage = () => {
       await api.patch(`/employer/profile/${profile.id}/`, profile);
       setMessage('Employer profile updated.');
     } catch (err) {
+      if (err?.response?.status === 401 || err?.response?.status === 403) {
+        setMessage('Session expired. Please login again.');
+        navigate('/employer/login');
+        return;
+      }
       setMessage(parseApiError(err, 'Unable to update employer profile.'));
     }
   };

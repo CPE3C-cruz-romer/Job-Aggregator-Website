@@ -9,8 +9,15 @@ const rawBaseUrl =
 
 const normalizedBaseUrl = rawBaseUrl.replace(/\/+$/, '');
 
-const getAccessToken = () => localStorage.getItem('accessToken') || localStorage.getItem('token');
-const getRefreshToken = () => localStorage.getItem('refreshToken');
+const getAccessToken = () => (
+  localStorage.getItem('accessToken')
+  || localStorage.getItem('token')
+  || localStorage.getItem('access')
+);
+const getRefreshToken = () => (
+  localStorage.getItem('refreshToken')
+  || localStorage.getItem('refresh')
+);
 
 const REFRESH_ENDPOINTS = [
   `${normalizedBaseUrl}/auth/token/refresh/`,
@@ -34,9 +41,14 @@ let pendingRequests = [];
 
 const clearAuthStorage = () => {
   localStorage.removeItem('accessToken');
+  localStorage.removeItem('token');
+  localStorage.removeItem('access');
   localStorage.removeItem('refreshToken');
+  localStorage.removeItem('refresh');
   localStorage.removeItem('user');
   localStorage.removeItem('isEmployer');
+  localStorage.removeItem('onboardingCompleted');
+  window.dispatchEvent(new Event('auth:expired'));
 };
 
 const flushQueue = (error, token = null) => {
@@ -67,8 +79,18 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     const status = error?.response?.status;
+    const requestUrl = String(originalRequest?.url || '').toLowerCase();
+    const isAuthRequest = (
+      requestUrl.includes('/auth/login/')
+      || requestUrl.includes('/auth/employer/login/')
+      || requestUrl.includes('/auth/google/')
+      || requestUrl.includes('/auth/register/')
+      || requestUrl.includes('/auth/employer/register/')
+      || requestUrl.includes('/auth/token/refresh/')
+      || requestUrl.includes('/token/refresh/')
+    );
 
-    if (!originalRequest || status !== 401 || originalRequest._retry) {
+    if (!originalRequest || status !== 401 || originalRequest._retry || isAuthRequest) {
       return Promise.reject(error);
     }
 

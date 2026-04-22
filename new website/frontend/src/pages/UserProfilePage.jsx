@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { parseApiError } from '../utils/error';
 
 const UserProfilePage = () => {
+  const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [message, setMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
@@ -39,6 +41,11 @@ const UserProfilePage = () => {
       await loadProfile();
       setMessage('Profile updated successfully.');
     } catch (err) {
+      if (err?.response?.status === 401 || err?.response?.status === 403) {
+        setMessage('Session expired. Please login again.');
+        navigate('/login');
+        return;
+      }
       setMessage(parseApiError(err, 'Failed to update profile.'));
     }
   };
