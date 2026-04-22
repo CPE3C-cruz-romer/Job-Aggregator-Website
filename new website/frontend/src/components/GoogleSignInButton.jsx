@@ -94,9 +94,8 @@ const GoogleSignInButton = ({ onCredential, onError }) => {
       cancelled = true;
       credentialListeners.delete(listener);
     };
-  // GIS should initialize once per page lifecycle.
-  
-  }, []);
+    // GIS should initialize once per page lifecycle.
+  }, [clientId]);
 
   if (!clientId) return null;
   return <div ref={containerRef} style={{ display: ready ? 'block' : 'none' }} />;
