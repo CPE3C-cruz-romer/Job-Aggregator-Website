@@ -58,6 +58,14 @@ const ResumePage = () => {
     try {
       const form = buildResumeUploadFormData({ file, captureBlob: confirmedCaptureBlob, nickname });
       const { data } = await api.post('/resume/', form);
+      
+      // Clear upload form after successful upload
+      setFile(null);
+      setNickname('');
+      setConfirmedCaptureBlob(null);
+      resetCapture();
+      stopCamera();
+      
       setInfo(`Resume uploaded at ${new Date(data.uploaded_at).toLocaleString()}`);
       if (data.image_quality?.reason) {
         setInfo((prev) => `${prev} • ${data.image_quality.reason}`);

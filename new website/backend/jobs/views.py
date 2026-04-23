@@ -823,7 +823,14 @@ class ResumeViewSet(viewsets.ModelViewSet):
                 uploaded_image = uploaded_file
                 uploaded_file = None
 
-        serializer = self.get_serializer(resume, data=request.data, partial=True)
+        # Build serializer data with explicit file assignments
+        serializer_data = dict(request.data)
+        if uploaded_file:
+            serializer_data['file'] = uploaded_file
+        if uploaded_image:
+            serializer_data['image'] = uploaded_image
+        
+        serializer = self.get_serializer(resume, data=serializer_data, partial=True)
         serializer.is_valid(raise_exception=True)
         resume = serializer.save()
 
