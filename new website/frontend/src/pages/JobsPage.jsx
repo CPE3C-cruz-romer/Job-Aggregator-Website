@@ -89,6 +89,17 @@ const JobsPage = () => {
         const derivedQueries = buildPreferenceQueries(data);
         setPreferredQueries(derivedQueries);
         await loadJobs({ searchQueries: derivedQueries });
+        
+        // Load recommended jobs without blocking main jobs load
+        api.get('/jobs/match/?limit=10&page=1')
+          .then(({ data: matchData }) => {
+            setRecommended(matchData.results || []);
+            setRecommendedHasMore(Boolean(matchData.has_more));
+            setRecommendedPage(1);
+          })
+          .catch(() => {
+            setRecommended([]);
+          });
       } catch {
         const profileRaw = localStorage.getItem('userProfile');
         if (!profileRaw) {
@@ -99,28 +110,24 @@ const JobsPage = () => {
           const profile = JSON.parse(profileRaw);
           const derivedQueries = buildPreferenceQueries(profile);
           setPreferredQueries(derivedQueries);
-          loadJobs({ searchQueries: derivedQueries });
+          await loadJobs({ searchQueries: derivedQueries });
+          
+          // Load recommended jobs without blocking
+          api.get('/jobs/match/?limit=10&page=1')
+            .then(({ data: matchData }) => {
+              setRecommended(matchData.results || []);
+              setRecommendedHasMore(Boolean(matchData.has_more));
+              setRecommendedPage(1);
+            })
+            .catch(() => {
+              setRecommended([]);
+            });
         } catch {
           loadJobs();
         }
       }
     };
     boot();
-  }, []);
-  useEffect(() => {
-    const loadMatches = async () => {
-      const token = localStorage.getItem('accessToken');
-      if (!token) return;
-      try {
-        const { data } = await api.get('/jobs/match/?limit=10&page=1');
-        setRecommended(data.results || []);
-        setRecommendedHasMore(Boolean(data.has_more));
-        setRecommendedPage(1);
-      } catch {
-        setRecommended([]);
-      }
-    };
-    loadMatches();
   }, []);
 
   const saveJob = async (jobId) => {

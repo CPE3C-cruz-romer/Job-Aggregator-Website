@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { getNormalizedJobUrl, hasExternalJobUrl } from '../utils/job';
 
-const JobCard = ({ job, onSave, onApply, canInteract = true, allowApply = false, animationIndex = 0 }) => {
+const JobCard = React.memo(({ job, onSave, onApply, canInteract = true, allowApply = false, animationIndex = 0 }) => {
   const jobUrl = getNormalizedJobUrl(job.url);
   const isExternal = hasExternalJobUrl(jobUrl);
 
@@ -32,6 +32,11 @@ const JobCard = ({ job, onSave, onApply, canInteract = true, allowApply = false,
     </div>
   </article>
 );
-};
+}, (prevProps, nextProps) => {
+  return prevProps.job.id === nextProps.job.id && 
+         prevProps.animationIndex === nextProps.animationIndex &&
+         prevProps.canInteract === nextProps.canInteract;
+});
 
+JobCard.displayName = 'JobCard';
 export default JobCard;

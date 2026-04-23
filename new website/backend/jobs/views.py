@@ -293,20 +293,25 @@ class JobViewSet(viewsets.ModelViewSet):
         queryset = self.filter_queryset(self.get_queryset())
         limit = min(50, max(1, self._safe_int(request.query_params.get('limit'), 10)))
         skip = max(0, self._safe_int(request.query_params.get('skip'), 0))
-        reserve_size = limit * 3
-        cache_key = f"jobs:list:{request.get_full_path()}:limit={limit}:skip={skip}"
-        cached_ids = cache.get(cache_key)
-        if cached_ids is None:
-            reserve_ids = list(queryset.values_list('id', flat=True)[skip: skip + reserve_size])
-            cache.set(cache_key, reserve_ids, 180)
-            cached_ids = reserve_ids
-        page_ids = cached_ids[:limit]
-        jobs = list(Job.objects.filter(id__in=page_ids).select_related('posted_by_employer'))
-        jobs_map = {job.id: job for job in jobs}
-        ordered_jobs = [jobs_map[job_id] for job_id in page_ids if job_id in jobs_map]
-        serializer = self.get_serializer(ordered_jobs, many=True)
-        response = Response(serializer.data, status=status.HTTP_200_OK)
-        response['X-Has-More'] = '1' if len(cached_ids) > limit else '0'
+        
+        # Use query params for cache key to avoid per-skip caching overhead
+        base_cache_key = f"jobs:list:{request.GET.urlencode()}"
+        cached_result = cache.get(base_cache_key)
+        
+        if cached_result is None:
+            # Fetch more than needed to determine if there are more results
+            jobs = list(queryset[skip:skip + limit + 1].select_related('posted_by_employer'))
+            has_more = len(jobs) > limit
+            jobs = jobs[:limit]
+            serializer = self.get_serializer(jobs, many=True)
+            cached_result = {
+                'data': serializer.data,
+                'has_more': has_more
+            }
+            cache.set(base_cache_key, cached_result, 180)
+        
+        response = Response(cached_result['data'], status=status.HTTP_200_OK)
+        response['X-Has-More'] = '1' if cached_result['has_more'] else '0'
         response['X-Next-Skip'] = str(skip + limit)
         return response
 
@@ -511,6 +516,7 @@ class JobViewSet(viewsets.ModelViewSet):
         profile_scope = str(profile.user_id) if profile else 'anon'
         cache_key = f"jobs_match:{profile_scope}:{','.join(sorted(normalized_interests))}:{','.join(sorted(normalized_skills))}"
         ranked_ids = cache.get(cache_key)
+        
         if ranked_ids is None:
             jobs = _exclude_non_production_jobs(Job.objects.select_related('posted_by_employer').all())
             if generated_queries or query_keywords:
@@ -521,14 +527,17 @@ class JobViewSet(viewsets.ModelViewSet):
             ranked_jobs = self._rank_jobs(jobs, normalized_interests, normalized_skills)
             ranked_ids = [job.id for job in ranked_jobs]
             cache.set(cache_key, ranked_ids, timeout=300)
-        all_jobs = list(Job.objects.filter(id__in=ranked_ids).select_related('posted_by_employer'))
-        jobs_map = {job.id: job for job in all_jobs}
-        ordered = [jobs_map[job_id] for job_id in ranked_ids if job_id in jobs_map]
-        ordered = self._rank_jobs(ordered, normalized_interests, normalized_skills)
-        total = len(ordered)
+        
+        # Only fetch jobs needed for this page
+        total = len(ranked_ids)
         start = (page - 1) * limit
         end = start + limit
-        paginated = ordered[start:end]
+        page_ids = ranked_ids[start:end]
+        
+        paginated = list(Job.objects.filter(id__in=page_ids).select_related('posted_by_employer'))
+        # Maintain ranking order
+        paginated_map = {job.id: job for job in paginated}
+        paginated = [paginated_map[job_id] for job_id in page_ids if job_id in paginated_map]
 
         return Response(
             {
