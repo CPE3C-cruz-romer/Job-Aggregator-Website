@@ -481,11 +481,32 @@ class JobViewSet(viewsets.ModelViewSet):
         if result['error']:
             return Response({'error': result['error']}, status=status.HTTP_400_BAD_REQUEST)
 
+        refreshed_queryset = _exclude_non_production_jobs(
+            Job.objects.select_related('posted_by_employer').filter(
+                Q(title__icontains=query)
+                | Q(description__icontains=query)
+                | Q(company__icontains=query)
+                | Q(category__icontains=query)
+            )
+        )
+        if location:
+            refreshed_queryset = refreshed_queryset.filter(location__icontains=location)
+        refreshed_jobs = list(refreshed_queryset[:25])
+        serialized_jobs = self.get_serializer(refreshed_jobs, many=True).data
+        jobs_payload = [
+            {
+                **job,
+                'createdAt': job.get('created_at'),
+            }
+            for job in serialized_jobs
+        ]
+
         response_payload = {
             **result,
             'query': query,
             'where': location,
             'page': max(1, min(pages, 5)),
+            'jobs': jobs_payload,
         }
         return Response(response_payload)
 

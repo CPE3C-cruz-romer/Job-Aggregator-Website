@@ -31,6 +31,25 @@ const mergeJobsById = (existingJobs = [], incomingJobs = []) => {
   return Array.from(map.values());
 };
 
+const toJobShape = (job = {}) => ({
+  id: job?.id,
+  title: job?.title || 'Untitled position',
+  company: job?.company || 'Unknown company',
+  location: job?.location || 'Unknown location',
+  description: job?.description || '',
+  createdAt: job?.createdAt || job?.created_at || null,
+  ...job,
+});
+
+const extractJobsArray = (responseData) => {
+  if (Array.isArray(responseData)) return responseData;
+  if (Array.isArray(responseData?.jobs)) return responseData.jobs;
+  if (Array.isArray(responseData?.results)) return responseData.results;
+  if (Array.isArray(responseData?.data?.jobs)) return responseData.data.jobs;
+  if (Array.isArray(responseData?.data?.results)) return responseData.data.results;
+  return [];
+};
+
 const JobsPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -72,7 +91,7 @@ const JobsPage = () => {
         params.set('query', searchQuery);
       }
       const { data, headers } = await api.get(`/jobs/?${params.toString()}`);
-      const payload = Array.isArray(data) ? data : (data?.results || []);
+      const payload = extractJobsArray(data).map(toJobShape);
       setJobs((prev) => (append ? mergeJobsById(prev, payload) : payload));
       setHasMoreJobs(headers['x-has-more'] === '1');
       setSkip(Number(headers['x-next-skip'] || nextSkip + 10));
@@ -108,10 +127,10 @@ const JobsPage = () => {
         setPreferredQueries(derivedQueries);
         await loadJobs({ searchQueries: derivedQueries });
         
-        // Load recommended jobs without blocking main jobs load
-        api.get('/jobs/match/?limit=10&page=1')
+          // Load recommended jobs without blocking main jobs load
+          api.get('/jobs/match/?limit=10&page=1')
           .then(({ data: matchData }) => {
-            setRecommended(matchData.results || []);
+            setRecommended(extractJobsArray(matchData).map(toJobShape));
             setRecommendedHasMore(Boolean(matchData.has_more));
             setRecommendedPage(1);
           })
@@ -133,7 +152,7 @@ const JobsPage = () => {
           // Load recommended jobs without blocking
           api.get('/jobs/match/?limit=10&page=1')
             .then(({ data: matchData }) => {
-              setRecommended(matchData.results || []);
+              setRecommended(extractJobsArray(matchData).map(toJobShape));
               setRecommendedHasMore(Boolean(matchData.has_more));
               setRecommendedPage(1);
             })
@@ -173,7 +192,8 @@ const JobsPage = () => {
     const nextPage = recommendedPage + 1;
     try {
       const { data } = await api.get(`/jobs/match/?limit=10&page=${nextPage}`);
-      setRecommended((prev) => [...prev, ...(data.results || [])]);
+      const nextJobs = extractJobsArray(data).map(toJobShape);
+      setRecommended((prev) => [...prev, ...nextJobs]);
       setRecommendedHasMore(Boolean(data.has_more));
       setRecommendedPage(nextPage);
     } catch {
