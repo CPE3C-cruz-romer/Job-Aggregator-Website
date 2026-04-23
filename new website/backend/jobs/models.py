@@ -52,6 +52,14 @@ class Job(models.Model):
 
     class Meta:
         ordering = ['-priority_score', '-created_at']
+        indexes = [
+            models.Index(fields=['title']),
+            models.Index(fields=['location']),
+            models.Index(fields=['company']),
+            models.Index(fields=['source']),
+            models.Index(fields=['-priority_score', '-created_at']),
+            models.Index(fields=['required_skills']),
+        ]
 
     def __str__(self):
         return f"{self.title} - {self.company}"

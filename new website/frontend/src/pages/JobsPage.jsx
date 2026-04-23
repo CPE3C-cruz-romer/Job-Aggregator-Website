@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api/client';
 import JobCard from '../components/JobCard';
 import FilterBar from '../components/FilterBar';
@@ -33,6 +33,7 @@ const mergeJobsById = (existingJobs = [], incomingJobs = []) => {
 
 const JobsPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -43,7 +44,17 @@ const JobsPage = () => {
   const [recommendedPage, setRecommendedPage] = useState(1);
   const [recommendedHasMore, setRecommendedHasMore] = useState(false);
   const [preferredQueries, setPreferredQueries] = useState([]);
+  const [detectedSkills, setDetectedSkills] = useState([]);
   const skeletonCards = Array.from({ length: 6 }, (_, index) => index);
+
+  // Extract skills from URL query parameters
+  useEffect(() => {
+    const skillsParam = searchParams.get('skills');
+    if (skillsParam) {
+      const skillsList = skillsParam.split(',').filter(s => s.trim());
+      setDetectedSkills(skillsList);
+    }
+  }, [searchParams]);
 
   const loadJobs = async ({ searchQuery = '', searchQueries = [], nextSkip = 0, append = false } = {}) => {
     setLoading(true);
@@ -78,6 +89,13 @@ const JobsPage = () => {
 
   useEffect(() => {
     const boot = async () => {
+      // If we have detected skills from resume, use them directly
+      if (detectedSkills && detectedSkills.length > 0) {
+        await loadJobs({ searchQueries: detectedSkills });
+        setMessage(`Searching jobs for skills: ${detectedSkills.join(', ')}`);
+        return;
+      }
+
       const token = localStorage.getItem('accessToken') || localStorage.getItem('access') || localStorage.getItem('token');
       if (!token) {
         loadJobs();
@@ -128,7 +146,7 @@ const JobsPage = () => {
       }
     };
     boot();
-  }, []);
+  }, [detectedSkills]);
 
   const saveJob = async (jobId) => {
     const token = localStorage.getItem('accessToken');

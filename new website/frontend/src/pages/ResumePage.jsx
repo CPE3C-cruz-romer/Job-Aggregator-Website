@@ -128,6 +128,13 @@ const ResumePage = () => {
     }
   };
 
+  const searchJobsWithDetectedSkills = () => {
+    if (recommendations && recommendations.extracted_skills && recommendations.extracted_skills.length > 0) {
+      const skillsQuery = recommendations.extracted_skills.slice(0, 3).join(',');
+      navigate(`/jobs?skills=${encodeURIComponent(skillsQuery)}`);
+    }
+  };
+
   return (
     <section className="page">
       <h2>Resume Upload, Skill Match & Recommended Jobs</h2>
@@ -192,6 +199,11 @@ const ResumePage = () => {
               <strong>Parsed profile:</strong> {Object.entries(recommendations.profile).map(([k, v]) => `${k}: ${v.length}`).join(' • ')}
             </p>
           )}
+          <div className="actions">
+            <button className="btn" type="button" onClick={searchJobsWithDetectedSkills}>
+              Search All Jobs with These Skills
+            </button>
+          </div>
           {recommendations.recommended_jobs.length === 0 ? (
             <p>No suitable jobs found yet. Try refreshing jobs and uploading a more detailed resume.</p>
           ) : (
