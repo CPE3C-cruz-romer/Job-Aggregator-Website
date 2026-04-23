@@ -471,12 +471,12 @@ class JobViewSet(viewsets.ModelViewSet):
         page = self._safe_int(self._pick_param(request, 'page', default='1'), 1)
         pages = self._safe_int(self._pick_param(request, 'pages', default=str(page)), page)
 
-        result = fetch_jobs_from_adzuna(
-            query=query,
-            location=location,
-            results_per_page=max(10, min(results_per_page, 50)),
-            pages=max(1, min(pages, 5)),
-        )
+        result = fetch_jobs_from_adzuna({
+            'query': query,
+            'location': location,
+            'results_per_page': max(10, min(results_per_page, 50)),
+            'pages': max(1, min(pages, 5)),
+        })
 
         if result['error']:
             return Response({'error': result['error']}, status=status.HTTP_400_BAD_REQUEST)

@@ -119,7 +119,19 @@ INFERRED_SKILLS = {
     'selenium': {'testing', 'quality assurance'},
 }
 
-def fetch_jobs_from_adzuna(query='software engineer', location='united states', results_per_page=50, pages=3):
+def fetch_jobs_from_adzuna(config=None, **legacy_kwargs):
+    config = config or {}
+    if not isinstance(config, dict):
+        config = {'query': config}
+
+    if legacy_kwargs:
+        config = {**config, **legacy_kwargs}
+
+    query = config.get('query', 'software engineer')
+    location = config.get('location', 'united states')
+    results_per_page = config.get('results_per_page', 50)
+    pages = config.get('pages', 3)
+
     if not settings.ADZUNA_APP_ID or not settings.ADZUNA_APP_KEY:
         return {
             'created': 0,
